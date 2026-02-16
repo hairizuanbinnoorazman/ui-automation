@@ -13,7 +13,11 @@ import (
 	"github.com/hairizuan-noorazman/ui-automation/cmd/backend/handlers"
 	"github.com/hairizuan-noorazman/ui-automation/database"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuan-noorazman/ui-automation/project"
 	"github.com/hairizuan-noorazman/ui-automation/session"
+	"github.com/hairizuan-noorazman/ui-automation/storage"
+	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
+	"github.com/hairizuan-noorazman/ui-automation/testrun"
 	"github.com/hairizuan-noorazman/ui-automation/user"
 	"github.com/spf13/cobra"
 )
@@ -76,8 +80,22 @@ func runServer(cmd *cobra.Command, args []string) error {
 		"database": cfg.Database.Database,
 	})
 
+	// Initialize storage
+	blobStorage, err := storage.NewLocalStorage(cfg.Storage.BaseDir)
+	if err != nil {
+		return fmt.Errorf("failed to initialize storage: %w", err)
+	}
+	log.Info(ctx, "storage initialized", map[string]interface{}{
+		"type":     cfg.Storage.Type,
+		"base_dir": cfg.Storage.BaseDir,
+	})
+
 	// Initialize stores
 	userStore := user.NewMySQLStore(db, log)
+	projectStore := project.NewMySQLStore(db, log)
+	testProcedureStore := testprocedure.NewMySQLStore(db, log)
+	testRunStore := testrun.NewMySQLStore(db, log)
+	assetStore := testrun.NewMySQLAssetStore(db, log)
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -119,6 +137,55 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/users/{id}", userHandler.GetByID).Methods("GET")
 	apiRouter.HandleFunc("/users/{id}", userHandler.Update).Methods("PUT")
 	apiRouter.HandleFunc("/users/{id}", userHandler.Delete).Methods("DELETE")
+
+	// Project routes (protected)
+	projectHandler := handlers.NewProjectHandler(projectStore, log)
+	projectAuth := handlers.NewProjectAuthorizationMiddleware(projectStore, log)
+
+	apiRouter.HandleFunc("/projects", projectHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/projects", projectHandler.Create).Methods("POST")
+
+	// Project-specific routes with authorization
+	projectRouter := apiRouter.PathPrefix("/projects/{id}").Subrouter()
+	projectRouter.Use(projectAuth.Handler)
+	projectRouter.HandleFunc("", projectHandler.GetByID).Methods("GET")
+	projectRouter.HandleFunc("", projectHandler.Update).Methods("PUT")
+	projectRouter.HandleFunc("", projectHandler.Delete).Methods("DELETE")
+
+	// Test Procedure routes (protected by project authorization)
+	testProcedureHandler := handlers.NewTestProcedureHandler(testProcedureStore, log)
+
+	// List and create procedures for a project
+	apiRouter.HandleFunc("/projects/{project_id}/procedures", testProcedureHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/projects/{project_id}/procedures", testProcedureHandler.Create).Methods("POST")
+
+	// Individual procedure operations
+	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}", testProcedureHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}", testProcedureHandler.Update).Methods("PUT")
+	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}", testProcedureHandler.Delete).Methods("DELETE")
+
+	// Versioning operations
+	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.CreateVersion).Methods("POST")
+	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.GetVersionHistory).Methods("GET")
+
+	// Test Run routes (protected)
+	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, blobStorage, log)
+
+	// List and create runs for a procedure
+	apiRouter.HandleFunc("/procedures/{procedure_id}/runs", testRunHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/procedures/{procedure_id}/runs", testRunHandler.Create).Methods("POST")
+
+	// Individual run operations
+	apiRouter.HandleFunc("/runs/{run_id}", testRunHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/runs/{run_id}", testRunHandler.Update).Methods("PUT")
+	apiRouter.HandleFunc("/runs/{run_id}/start", testRunHandler.Start).Methods("POST")
+	apiRouter.HandleFunc("/runs/{run_id}/complete", testRunHandler.Complete).Methods("POST")
+
+	// Asset operations
+	apiRouter.HandleFunc("/runs/{run_id}/assets", testRunHandler.UploadAsset).Methods("POST")
+	apiRouter.HandleFunc("/runs/{run_id}/assets", testRunHandler.ListAssets).Methods("GET")
+	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DownloadAsset).Methods("GET")
+	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DeleteAsset).Methods("DELETE")
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

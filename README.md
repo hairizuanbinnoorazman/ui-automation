@@ -8,15 +8,24 @@ A comprehensive web UI automation testing platform with integrated documentation
 - User authentication system with plain username + password
 - Initial version supports basic credential-based access
 
-### Test Procedures
-- Create and manage multiple test procedures for UI testing
-- Current focus: Web automation testing
-- Aggregate test procedures together as projects for better organization
+### Project Management
+- Organize test procedures into projects
+- Owner-based access control
+- Soft delete support for data retention
 
-### Test Documentation
-- Upload notes and images for each test run
-- Provides proof and documentation of web automation execution
-- Track test execution history with visual evidence
+### Test Procedures
+- Create and manage test procedures with JSON-based steps
+- **Explicit versioning**: User-controlled version creation
+- In-place updates for iterative development
+- Version history tracking for audit trails
+- Each test run references a specific immutable procedure version
+
+### Test Run Management
+- Track test execution with lifecycle management (pending → running → passed/failed/skipped)
+- Attach multiple assets (images, videos, documents, binaries) to test runs
+- Automatic asset storage in local filesystem (future: S3, GCS support)
+- File upload with security controls (100MB limit, path traversal protection)
+- Complete audit trail with timestamps
 
 ### Automated Test Generation
 - Convert manual test procedures to automated tests
@@ -84,17 +93,51 @@ make test
 
 ### API Endpoints
 
+All authenticated endpoints require a session cookie obtained from login.
+
 #### Public Endpoints
 - `GET /health` - Health check
+
+#### Authentication
 - `POST /api/v1/auth/register` - Register new user
 - `POST /api/v1/auth/login` - Login with credentials
 - `POST /api/v1/auth/logout` - Logout
 
-#### Protected Endpoints (Require Authentication)
-- `GET /api/v1/users` - List users (with pagination)
+#### Users (Authenticated)
+- `GET /api/v1/users` - List users (paginated)
 - `GET /api/v1/users/{id}` - Get user by ID
 - `PUT /api/v1/users/{id}` - Update user
 - `DELETE /api/v1/users/{id}` - Soft delete user
+
+#### Projects (Authenticated, Owner-Only)
+- `GET /api/v1/projects` - List user's projects
+- `POST /api/v1/projects` - Create project
+- `GET /api/v1/projects/{id}` - Get project details
+- `PUT /api/v1/projects/{id}` - Update project
+- `DELETE /api/v1/projects/{id}` - Soft delete project
+
+#### Test Procedures (Authenticated, Project Owner-Only)
+- `GET /api/v1/projects/{project_id}/procedures` - List procedures
+- `POST /api/v1/projects/{project_id}/procedures` - Create procedure
+- `GET /api/v1/projects/{project_id}/procedures/{id}` - Get procedure
+- `PUT /api/v1/projects/{project_id}/procedures/{id}` - Update procedure (in-place)
+- `DELETE /api/v1/projects/{project_id}/procedures/{id}` - Delete procedure
+- `POST /api/v1/projects/{project_id}/procedures/{id}/versions` - Create new version
+- `GET /api/v1/projects/{project_id}/procedures/{id}/versions` - Get version history
+
+#### Test Runs (Authenticated)
+- `GET /api/v1/procedures/{procedure_id}/runs` - List runs for procedure
+- `POST /api/v1/procedures/{procedure_id}/runs` - Create test run
+- `GET /api/v1/runs/{run_id}` - Get run details
+- `PUT /api/v1/runs/{run_id}` - Update run notes
+- `POST /api/v1/runs/{run_id}/start` - Start test run
+- `POST /api/v1/runs/{run_id}/complete` - Complete test run
+
+#### Test Run Assets (Authenticated)
+- `POST /api/v1/runs/{run_id}/assets` - Upload asset (multipart/form-data)
+- `GET /api/v1/runs/{run_id}/assets` - List assets for run
+- `GET /api/v1/runs/{run_id}/assets/{asset_id}` - Download asset
+- `DELETE /api/v1/runs/{run_id}/assets/{asset_id}` - Delete asset
 
 See detailed API documentation and curl examples below.
 
@@ -116,20 +159,27 @@ The backend follows enterprise patterns for maintainability and extensibility:
 ```
 ui-automation/
 ├── cmd/backend/              # Application entry point
+│   └── handlers/            # HTTP request handlers
 ├── user/                     # User domain
-├── session/                  # Session management
-├── database/                 # Database & migrations
-├── logger/                   # Logging abstraction
-└── testutil/                 # Test utilities
+├── project/                  # Project domain
+├── testprocedure/           # Test procedure domain (with versioning)
+├── testrun/                 # Test run domain (with assets)
+├── storage/                 # Blob storage abstraction
+├── session/                 # Session management
+├── database/                # Database & migrations
+├── logger/                  # Logging abstraction
+└── testutil/                # Test utilities
 ```
 
 ### Database Schema
 
-The system is built with extensibility in mind. Current tables:
+The system uses a fully implemented relational schema:
 - **users** - User accounts with authentication
-- **projects** - Test procedure organization (ready for future use)
-- **test_procedures** - Test steps and metadata (ready for future use)
-- **test_runs** - Execution history (ready for future use)
+- **projects** - Project organization (owner_id → user.id)
+- **test_procedures** - Test steps with versioning (project_id → project.id)
+  - Versioning columns: version, is_latest, parent_id
+- **test_runs** - Execution history (test_procedure_id → test_procedure.id)
+- **test_run_assets** - Asset metadata (test_run_id → test_run.id)
 
 ## API Reference
 
@@ -187,9 +237,205 @@ session:
   duration: 24h
   secure: false  # Set to true in production (HTTPS)
 
+storage:
+  type: local  # "local" (future: "s3", "gcs")
+  base_dir: ./uploads
+
 log:
   level: info  # debug, info, warn, error
 ```
+
+### Detailed API Examples
+
+#### Complete Workflow Example
+
+```bash
+# 1. Register and login
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{"email":"user@example.com","username":"user","password":"password123"}'
+
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{"email":"user@example.com","password":"password123"}'
+
+# 2. Create a project
+curl -X POST http://localhost:8080/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"name":"My Test Project","description":"Testing project"}' | jq
+
+# 3. List projects
+curl -X GET "http://localhost:8080/api/v1/projects?limit=10&offset=0" \
+  -b cookies.txt | jq
+
+# 4. Create a test procedure
+curl -X POST http://localhost:8080/api/v1/projects/1/procedures \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "name":"Login Test",
+    "description":"Test user login",
+    "steps":[
+      {"action":"navigate","url":"https://example.com/login"},
+      {"action":"type","selector":"#username","value":"testuser"},
+      {"action":"type","selector":"#password","value":"pass123"},
+      {"action":"click","selector":"#login-btn"}
+    ]
+  }' | jq
+
+# 5. Create a test run
+curl -X POST http://localhost:8080/api/v1/procedures/1/runs \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"notes":"First test execution"}' | jq
+
+# 6. Start the test run
+curl -X POST http://localhost:8080/api/v1/runs/1/start \
+  -H "Content-Type: application/json" \
+  -b cookies.txt | jq
+
+# 7. Upload a screenshot
+curl -X POST http://localhost:8080/api/v1/runs/1/assets \
+  -b cookies.txt \
+  -F "file=@screenshot.png" \
+  -F "asset_type=image" \
+  -F "description=Login page screenshot" | jq
+
+# 8. Complete the test run
+curl -X POST http://localhost:8080/api/v1/runs/1/complete \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"status":"passed","notes":"All steps completed successfully"}' | jq
+
+# 9. List assets for the run
+curl -X GET http://localhost:8080/api/v1/runs/1/assets \
+  -b cookies.txt | jq
+
+# 10. Download an asset
+curl -X GET http://localhost:8080/api/v1/runs/1/assets/1 \
+  -b cookies.txt \
+  -o downloaded_screenshot.png
+```
+
+#### Test Procedure Versioning Example
+
+```bash
+# 1. Create initial test procedure
+curl -X POST http://localhost:8080/api/v1/projects/1/procedures \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{
+    "name":"API Test",
+    "description":"Version 1",
+    "steps":[{"action":"api_call","endpoint":"/users"}]
+  }' | jq
+
+# 2. Update test procedure (in-place, doesn't create new version)
+curl -X PUT http://localhost:8080/api/v1/projects/1/procedures/1 \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"description":"Version 1 - Updated"}' | jq
+
+# 3. Create a test run with v1
+curl -X POST http://localhost:8080/api/v1/procedures/1/runs \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"notes":"Run with v1"}' | jq
+
+# 4. Explicitly create version 2 (immutable copy)
+curl -X POST http://localhost:8080/api/v1/projects/1/procedures/1/versions \
+  -H "Content-Type: application/json" \
+  -b cookies.txt | jq
+
+# 5. Get version history (shows v1 and v2)
+curl -X GET http://localhost:8080/api/v1/projects/1/procedures/1/versions \
+  -b cookies.txt | jq
+
+# 6. Create test run with v2
+curl -X POST http://localhost:8080/api/v1/procedures/2/runs \
+  -H "Content-Type: application/json" \
+  -b cookies.txt \
+  -d '{"notes":"Run with v2"}' | jq
+
+# Result: Both test runs reference their specific procedure versions
+# - Run 1 references procedure ID 1 (v1)
+# - Run 2 references procedure ID 2 (v2)
+```
+
+#### Asset Management Example
+
+```bash
+# Upload different asset types
+curl -X POST http://localhost:8080/api/v1/runs/1/assets \
+  -b cookies.txt \
+  -F "file=@screenshot.png" \
+  -F "asset_type=image" \
+  -F "description=UI screenshot"
+
+curl -X POST http://localhost:8080/api/v1/runs/1/assets \
+  -b cookies.txt \
+  -F "file=@recording.mp4" \
+  -F "asset_type=video" \
+  -F "description=Test execution video"
+
+curl -X POST http://localhost:8080/api/v1/runs/1/assets \
+  -b cookies.txt \
+  -F "file=@logs.txt" \
+  -F "asset_type=document" \
+  -F "description=Test logs"
+
+# List all assets
+curl -X GET http://localhost:8080/api/v1/runs/1/assets \
+  -b cookies.txt | jq
+
+# Download specific asset
+curl -X GET http://localhost:8080/api/v1/runs/1/assets/1 \
+  -b cookies.txt \
+  -o downloaded_file
+
+# Delete asset
+curl -X DELETE http://localhost:8080/api/v1/runs/1/assets/1 \
+  -b cookies.txt | jq
+```
+
+### Versioning Behavior
+
+The system uses **explicit versioning** for test procedures:
+
+- **In-Place Updates** (`PUT /procedures/{id}`): Modifies the procedure without creating a new version
+  - Use for iterative development and fixing typos
+  - Doesn't affect existing test runs (they reference the snapshot at creation time)
+
+- **Explicit Version Creation** (`POST /procedures/{id}/versions`): Creates an immutable copy
+  - Use when you want to preserve history before major changes
+  - New version gets incremented version number (v2, v3, etc.)
+  - Only the latest version appears in procedure lists (is_latest=true)
+  - Old versions remain accessible via version history
+
+**Example Scenario:**
+1. Create procedure v1 with 3 steps
+2. Run test → references v1 (procedure ID 1)
+3. Update v1 description (in-place) → still v1
+4. Run test → references updated v1 (procedure ID 1)
+5. Create version → v2 created (procedure ID 2)
+6. Run test → references v2 (procedure ID 2)
+7. View history → shows both v1 and v2 with their test runs
+
+### Asset Upload Requirements
+
+- **Max file size**: 100MB
+- **Supported types**: image, video, binary, document
+- **Format**: multipart/form-data
+- **Required fields**:
+  - `file`: The file to upload
+  - `asset_type`: One of [image, video, binary, document]
+- **Optional fields**:
+  - `description`: Asset description
+- **Storage**: Files stored in `./uploads/test-runs/{run_id}/{asset_type}/{filename}`
+- **Security**: Path traversal protection, filename sanitization
 
 ## Development
 

@@ -19,5 +19,9 @@ session:
   duration: 24h
   secure: false  # Set to true in production (requires HTTPS)
 
+storage:
+  type: local  # "local" (future: "s3", "gcs")
+  base_dir: ./uploads
+
 log:
   level: info

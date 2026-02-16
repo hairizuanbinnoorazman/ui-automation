@@ -12,6 +12,7 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Session  SessionConfig
+	Storage  StorageConfig
 	Log      LogConfig
 }
 
@@ -40,6 +41,12 @@ type SessionConfig struct {
 	CookieSecret string
 	Duration     time.Duration
 	Secure       bool
+}
+
+// StorageConfig holds blob storage configuration.
+type StorageConfig struct {
+	Type    string // "local" (future: "s3", "gcs")
+	BaseDir string // default: "./uploads"
 }
 
 // LogConfig holds logging configuration.
@@ -83,6 +90,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("session.duration", "24h")
 	v.SetDefault("session.secure", false)
 
+	v.SetDefault("storage.type", "local")
+	v.SetDefault("storage.base_dir", "./uploads")
+
 	v.SetDefault("log.level", "info")
 
 	// Read config file
@@ -113,6 +123,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Session.CookieSecret = v.GetString("session.cookie_secret")
 	config.Session.Duration = v.GetDuration("session.duration")
 	config.Session.Secure = v.GetBool("session.secure")
+
+	config.Storage.Type = v.GetString("storage.type")
+	config.Storage.BaseDir = v.GetString("storage.base_dir")
 
 	config.Log.Level = v.GetString("log.level")
 
