@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,24 +14,27 @@ func TestMySQLStore_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully create project", func(t *testing.T) {
-		project := createTestProject("Test Project", "Test Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Test Project", "Test Description", ownerID)
 		err := store.Create(ctx, project)
 		require.NoError(t, err)
-		assert.NotZero(t, project.ID)
+		assert.NotEqual(t, uuid.Nil, project.ID)
 		assert.NotZero(t, project.CreatedAt)
 	})
 
 	t.Run("create project without description", func(t *testing.T) {
-		project := createTestProject("Minimal Project", "", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Minimal Project", "", ownerID)
 		err := store.Create(ctx, project)
 		require.NoError(t, err)
-		assert.NotZero(t, project.ID)
+		assert.NotEqual(t, uuid.Nil, project.ID)
 	})
 
 	t.Run("invalid project returns error", func(t *testing.T) {
+		ownerID := uuid.New()
 		project := &Project{
 			Description: "Missing name",
-			OwnerID:     1,
+			OwnerID:     ownerID,
 		}
 		err := store.Create(ctx, project)
 		assert.ErrorIs(t, err, ErrInvalidProjectName)
@@ -50,7 +54,8 @@ func TestMySQLStore_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("retrieve existing project", func(t *testing.T) {
-		project := createTestProject("Get Test Project", "Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Get Test Project", "Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 
 		retrieved, err := store.GetByID(ctx, project.ID)
@@ -63,12 +68,13 @@ func TestMySQLStore_GetByID(t *testing.T) {
 	})
 
 	t.Run("non-existent project returns error", func(t *testing.T) {
-		_, err := store.GetByID(ctx, 99999)
+		_, err := store.GetByID(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrProjectNotFound)
 	})
 
 	t.Run("soft-deleted project not found", func(t *testing.T) {
-		project := createTestProject("Deleted Project", "Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Deleted Project", "Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 		require.NoError(t, store.Delete(ctx, project.ID))
 
@@ -82,7 +88,8 @@ func TestMySQLStore_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("update single field", func(t *testing.T) {
-		project := createTestProject("Original Name", "Original Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Original Name", "Original Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 
 		err := store.Update(ctx, project.ID, SetName("Updated Name"))
@@ -95,7 +102,8 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update multiple fields", func(t *testing.T) {
-		project := createTestProject("Original Name", "Original Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Original Name", "Original Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 
 		err := store.Update(ctx, project.ID,
@@ -111,12 +119,13 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update non-existent project returns error", func(t *testing.T) {
-		err := store.Update(ctx, 99999, SetName("New Name"))
+		err := store.Update(ctx, uuid.New(), SetName("New Name"))
 		assert.ErrorIs(t, err, ErrProjectNotFound)
 	})
 
 	t.Run("update with invalid name returns error", func(t *testing.T) {
-		project := createTestProject("Valid Name", "Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Valid Name", "Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 
 		err := store.Update(ctx, project.ID, SetName(""))
@@ -129,7 +138,8 @@ func TestMySQLStore_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("delete existing project", func(t *testing.T) {
-		project := createTestProject("To Delete", "Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("To Delete", "Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 
 		err := store.Delete(ctx, project.ID)
@@ -141,12 +151,13 @@ func TestMySQLStore_Delete(t *testing.T) {
 	})
 
 	t.Run("delete non-existent project returns error", func(t *testing.T) {
-		err := store.Delete(ctx, 99999)
+		err := store.Delete(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrProjectNotFound)
 	})
 
 	t.Run("delete already deleted project returns error", func(t *testing.T) {
-		project := createTestProject("Already Deleted", "Description", 1)
+		ownerID := uuid.New()
+		project := createTestProject("Already Deleted", "Description", ownerID)
 		require.NoError(t, store.Create(ctx, project))
 		require.NoError(t, store.Delete(ctx, project.ID))
 
@@ -160,7 +171,7 @@ func TestMySQLStore_ListByOwner(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("list projects for owner with multiple projects", func(t *testing.T) {
-		ownerID := uint(1)
+		ownerID := uuid.New()
 		// Create 3 projects for owner 1
 		for i := 0; i < 3; i++ {
 			project := createTestProject("Project "+string(rune('A'+i)), "Description", ownerID)
@@ -173,8 +184,8 @@ func TestMySQLStore_ListByOwner(t *testing.T) {
 	})
 
 	t.Run("list projects returns only owner's projects", func(t *testing.T) {
-		owner1 := uint(10)
-		owner2 := uint(20)
+		owner1 := uuid.New()
+		owner2 := uuid.New()
 
 		project1 := createTestProject("Owner 1 Project", "Description", owner1)
 		require.NoError(t, store.Create(ctx, project1))
@@ -192,7 +203,7 @@ func TestMySQLStore_ListByOwner(t *testing.T) {
 	})
 
 	t.Run("list with pagination", func(t *testing.T) {
-		ownerID := uint(30)
+		ownerID := uuid.New()
 		// Create 5 projects
 		for i := 0; i < 5; i++ {
 			project := createTestProject("Paginated Project "+string(rune('A'+i)), "Description", ownerID)
@@ -214,7 +225,7 @@ func TestMySQLStore_ListByOwner(t *testing.T) {
 	})
 
 	t.Run("list excludes soft-deleted projects", func(t *testing.T) {
-		ownerID := uint(40)
+		ownerID := uuid.New()
 		project1 := createTestProject("Active Project", "Description", ownerID)
 		require.NoError(t, store.Create(ctx, project1))
 
@@ -232,7 +243,7 @@ func TestMySQLStore_ListByOwner(t *testing.T) {
 	})
 
 	t.Run("list returns empty for owner with no projects", func(t *testing.T) {
-		projects, err := store.ListByOwner(ctx, 99999, 10, 0)
+		projects, err := store.ListByOwner(ctx, uuid.New(), 10, 0)
 		require.NoError(t, err)
 		assert.Empty(t, projects)
 	})

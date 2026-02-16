@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS test_run_assets (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    test_run_id BIGINT UNSIGNED NOT NULL,
+    id CHAR(36) PRIMARY KEY,
+    test_run_id CHAR(36) NOT NULL,
     asset_type ENUM('image', 'video', 'binary', 'document') NOT NULL,
     asset_path VARCHAR(512) NOT NULL,
     file_name VARCHAR(255) NOT NULL,

@@ -4,7 +4,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 var (
@@ -20,13 +22,21 @@ var (
 
 // User represents a user in the system.
 type User struct {
-	ID           uint      `json:"id" gorm:"primaryKey"`
+	ID           uuid.UUID `json:"id" gorm:"type:char(36);primaryKey"`
 	Email        string    `json:"email" gorm:"uniqueIndex;not null"`
 	Username     string    `json:"username" gorm:"not null"`
 	PasswordHash string    `json:"-" gorm:"not null"`
 	IsActive     bool      `json:"is_active" gorm:"default:true"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// BeforeCreate hook to generate UUID before creating a new user
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+	if u.ID == uuid.Nil {
+		u.ID = uuid.New()
+	}
+	return nil
 }
 
 // SetPassword hashes and sets the user's password.

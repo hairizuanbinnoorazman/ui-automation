@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/project"
 )
@@ -129,16 +128,13 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 // GetByID handles getting a single project by ID.
 func (h *ProjectHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// Extract project ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid project ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "project")
+	if !ok {
 		return
 	}
 
 	// Get project
-	proj, err := h.projectStore.GetByID(r.Context(), uint(id))
+	proj, err := h.projectStore.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, project.ErrProjectNotFound) {
 			respondError(w, http.StatusNotFound, "project not found")
@@ -158,11 +154,8 @@ func (h *ProjectHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Update handles updating a project.
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Extract project ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid project ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "project")
+	if !ok {
 		return
 	}
 
@@ -188,7 +181,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update project
-	if err := h.projectStore.Update(r.Context(), uint(id), setters...); err != nil {
+	if err := h.projectStore.Update(r.Context(), id, setters...); err != nil {
 		if errors.Is(err, project.ErrProjectNotFound) {
 			respondError(w, http.StatusNotFound, "project not found")
 			return
@@ -211,16 +204,13 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles soft deleting a project.
 func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Extract project ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid project ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "project")
+	if !ok {
 		return
 	}
 
 	// Delete project
-	if err := h.projectStore.Delete(r.Context(), uint(id)); err != nil {
+	if err := h.projectStore.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, project.ErrProjectNotFound) {
 			respondError(w, http.StatusNotFound, "project not found")
 			return

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -50,6 +51,8 @@ func TestStatus_IsFinal(t *testing.T) {
 }
 
 func TestTestRun_Validate(t *testing.T) {
+	testProcedureID := uuid.New()
+	executedBy := uuid.New()
 	tests := []struct {
 		name    string
 		testRun TestRun
@@ -58,8 +61,8 @@ func TestTestRun_Validate(t *testing.T) {
 		{
 			name: "valid test run",
 			testRun: TestRun{
-				TestProcedureID: 1,
-				ExecutedBy:      1,
+				TestProcedureID: testProcedureID,
+				ExecutedBy:      executedBy,
 				Status:          StatusPending,
 			},
 			wantErr: nil,
@@ -67,7 +70,7 @@ func TestTestRun_Validate(t *testing.T) {
 		{
 			name: "missing test_procedure_id",
 			testRun: TestRun{
-				ExecutedBy: 1,
+				ExecutedBy: executedBy,
 				Status:     StatusPending,
 			},
 			wantErr: ErrInvalidTestProcedureID,
@@ -75,7 +78,7 @@ func TestTestRun_Validate(t *testing.T) {
 		{
 			name: "missing executed_by",
 			testRun: TestRun{
-				TestProcedureID: 1,
+				TestProcedureID: testProcedureID,
 				Status:          StatusPending,
 			},
 			wantErr: ErrInvalidExecutedBy,
@@ -83,8 +86,8 @@ func TestTestRun_Validate(t *testing.T) {
 		{
 			name: "invalid status",
 			testRun: TestRun{
-				TestProcedureID: 1,
-				ExecutedBy:      1,
+				TestProcedureID: testProcedureID,
+				ExecutedBy:      executedBy,
 				Status:          Status("invalid"),
 			},
 			wantErr: ErrInvalidStatus,
@@ -105,9 +108,11 @@ func TestTestRun_Validate(t *testing.T) {
 
 func TestTestRun_Start(t *testing.T) {
 	t.Run("successfully start test run", func(t *testing.T) {
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusPending,
 		}
 
@@ -120,9 +125,11 @@ func TestTestRun_Start(t *testing.T) {
 
 	t.Run("cannot start already started test run", func(t *testing.T) {
 		now := time.Now()
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusRunning,
 			StartedAt:       &now,
 		}
@@ -136,9 +143,11 @@ func TestTestRun_Start(t *testing.T) {
 func TestTestRun_Complete(t *testing.T) {
 	t.Run("successfully complete test run with passed", func(t *testing.T) {
 		now := time.Now()
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusRunning,
 			StartedAt:       &now,
 		}
@@ -153,9 +162,11 @@ func TestTestRun_Complete(t *testing.T) {
 
 	t.Run("successfully complete test run with failed", func(t *testing.T) {
 		now := time.Now()
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusRunning,
 			StartedAt:       &now,
 		}
@@ -167,9 +178,11 @@ func TestTestRun_Complete(t *testing.T) {
 	})
 
 	t.Run("cannot complete non-running test run", func(t *testing.T) {
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusPending,
 		}
 
@@ -179,9 +192,11 @@ func TestTestRun_Complete(t *testing.T) {
 
 	t.Run("cannot complete with non-final status", func(t *testing.T) {
 		now := time.Now()
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusRunning,
 			StartedAt:       &now,
 		}
@@ -195,9 +210,11 @@ func TestTestRun_Complete(t *testing.T) {
 
 	t.Run("complete without notes", func(t *testing.T) {
 		now := time.Now()
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 			Status:          StatusRunning,
 			StartedAt:       &now,
 		}

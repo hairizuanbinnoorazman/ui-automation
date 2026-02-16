@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 )
@@ -54,11 +53,8 @@ func (h *TestProcedureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract project ID from URL
-	vars := mux.Vars(r)
-	projectIDStr := vars["project_id"]
-	projectID, err := strconv.ParseUint(projectIDStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid project ID")
+	projectID, ok := parseUUIDOrRespond(w, r, "project_id", "project")
+	if !ok {
 		return
 	}
 
@@ -74,7 +70,7 @@ func (h *TestProcedureHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name:        req.Name,
 		Description: req.Description,
 		Steps:       req.Steps,
-		ProjectID:   uint(projectID),
+		ProjectID:   projectID,
 		CreatedBy:   userID,
 	}
 
@@ -97,11 +93,8 @@ func (h *TestProcedureHandler) Create(w http.ResponseWriter, r *http.Request) {
 // List handles listing test procedures for a project.
 func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Extract project ID from URL
-	vars := mux.Vars(r)
-	projectIDStr := vars["project_id"]
-	projectID, err := strconv.ParseUint(projectIDStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid project ID")
+	projectID, ok := parseUUIDOrRespond(w, r, "project_id", "project")
+	if !ok {
 		return
 	}
 
@@ -124,7 +117,7 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// List test procedures
-	procedures, err := h.testProcedureStore.ListByProject(r.Context(), uint(projectID), limit, offset)
+	procedures, err := h.testProcedureStore.ListByProject(r.Context(), projectID, limit, offset)
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to list test procedures", map[string]interface{}{
 			"error":      err.Error(),
@@ -143,16 +136,13 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 // GetByID handles getting a single test procedure by ID.
 func (h *TestProcedureHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
 		return
 	}
 
 	// Get test procedure
-	tp, err := h.testProcedureStore.GetByID(r.Context(), uint(id))
+	tp, err := h.testProcedureStore.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
 			respondError(w, http.StatusNotFound, "test procedure not found")
@@ -172,11 +162,8 @@ func (h *TestProcedureHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Update handles updating a test procedure (in-place, doesn't create version).
 func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
 		return
 	}
 
@@ -205,7 +192,7 @@ func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update test procedure
-	if err := h.testProcedureStore.Update(r.Context(), uint(id), setters...); err != nil {
+	if err := h.testProcedureStore.Update(r.Context(), id, setters...); err != nil {
 		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
 			respondError(w, http.StatusNotFound, "test procedure not found")
 			return
@@ -228,16 +215,13 @@ func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles deleting a test procedure.
 func (h *TestProcedureHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
 		return
 	}
 
 	// Delete test procedure
-	if err := h.testProcedureStore.Delete(r.Context(), uint(id)); err != nil {
+	if err := h.testProcedureStore.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
 			respondError(w, http.StatusNotFound, "test procedure not found")
 			return
@@ -256,16 +240,13 @@ func (h *TestProcedureHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // CreateVersion handles creating a new version of a test procedure.
 func (h *TestProcedureHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
 		return
 	}
 
 	// Create version
-	newVersion, err := h.testProcedureStore.CreateVersion(r.Context(), uint(id))
+	newVersion, err := h.testProcedureStore.CreateVersion(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
 			respondError(w, http.StatusNotFound, "test procedure not found")
@@ -285,16 +266,13 @@ func (h *TestProcedureHandler) CreateVersion(w http.ResponseWriter, r *http.Requ
 // GetVersionHistory handles getting version history for a test procedure.
 func (h *TestProcedureHandler) GetVersionHistory(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
 		return
 	}
 
 	// Get version history
-	versions, err := h.testProcedureStore.GetVersionHistory(r.Context(), uint(id))
+	versions, err := h.testProcedureStore.GetVersionHistory(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
 			respondError(w, http.StatusNotFound, "test procedure not found")

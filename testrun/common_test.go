@@ -3,6 +3,7 @@ package testrun
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/testutil"
 	"gorm.io/gorm"
@@ -21,7 +22,7 @@ func setupTestStore(t *testing.T) (*gorm.DB, Store, AssetStore) {
 }
 
 // createTestRun creates a test run with default values.
-func createTestRun(testProcedureID, executedBy uint, status Status, notes string) *TestRun {
+func createTestRun(testProcedureID, executedBy uuid.UUID, status Status, notes string) *TestRun {
 	return &TestRun{
 		TestProcedureID: testProcedureID,
 		ExecutedBy:      executedBy,
@@ -31,7 +32,7 @@ func createTestRun(testProcedureID, executedBy uint, status Status, notes string
 }
 
 // createTestAsset creates a test run asset with default values.
-func createTestAsset(testRunID uint, assetType AssetType, path, fileName string, size int64) *TestRunAsset {
+func createTestAsset(testRunID uuid.UUID, assetType AssetType, path, fileName string, size int64) *TestRunAsset {
 	return &TestRunAsset{
 		TestRunID: testRunID,
 		AssetType: assetType,

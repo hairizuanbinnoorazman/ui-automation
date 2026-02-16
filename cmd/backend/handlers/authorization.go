@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"net/http"
-	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/project"
@@ -48,14 +48,14 @@ func (m *ProjectAuthorizationMiddleware) Handler(next http.Handler) http.Handler
 			return
 		}
 
-		id, err := strconv.ParseUint(idStr, 10, 32)
+		id, err := uuid.Parse(idStr)
 		if err != nil {
-			respondError(w, http.StatusBadRequest, "invalid project ID")
+			respondError(w, http.StatusBadRequest, "invalid project ID: must be a valid UUID")
 			return
 		}
 
 		// Get project
-		proj, err := m.projectStore.GetByID(r.Context(), uint(id))
+		proj, err := m.projectStore.GetByID(r.Context(), id)
 		if err != nil {
 			if err == project.ErrProjectNotFound {
 				respondError(w, http.StatusNotFound, "project not found")

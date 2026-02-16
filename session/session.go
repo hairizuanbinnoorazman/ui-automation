@@ -1,11 +1,11 @@
 package session
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -18,8 +18,8 @@ var (
 
 // Session represents a user session.
 type Session struct {
-	ID        string
-	UserID    uint
+	ID        uuid.UUID
+	UserID    uuid.UUID
 	Email     string
 	CreatedAt time.Time
 	ExpiresAt time.Time
@@ -33,13 +33,13 @@ func (s *Session) IsExpired() bool {
 // Store is an in-memory session store.
 type Store struct {
 	mu       sync.RWMutex
-	sessions map[string]*Session
+	sessions map[uuid.UUID]*Session
 }
 
 // NewStore creates a new in-memory session store.
 func NewStore() *Store {
 	return &Store{
-		sessions: make(map[string]*Session),
+		sessions: make(map[uuid.UUID]*Session),
 	}
 }
 
@@ -51,7 +51,7 @@ func (s *Store) Set(session *Session) {
 }
 
 // Get retrieves a session from the store.
-func (s *Store) Get(sessionID string) (*Session, error) {
+func (s *Store) Get(sessionID uuid.UUID) (*Session, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -68,7 +68,7 @@ func (s *Store) Get(sessionID string) (*Session, error) {
 }
 
 // Delete removes a session from the store.
-func (s *Store) Delete(sessionID string) {
+func (s *Store) Delete(sessionID uuid.UUID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.sessions, sessionID)
@@ -89,13 +89,4 @@ func (s *Store) Cleanup() int {
 	}
 
 	return removed
-}
-
-// generateSessionID generates a random session ID.
-func generateSessionID() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(b), nil
 }

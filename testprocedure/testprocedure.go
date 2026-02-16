@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var (
@@ -53,17 +56,25 @@ func (s *Steps) Scan(value interface{}) error {
 
 // TestProcedure represents a test procedure in the system.
 type TestProcedure struct {
-	ID          uint      `json:"id" gorm:"primaryKey"`
-	ProjectID   uint      `json:"project_id" gorm:"not null;index:idx_project_id"`
-	Name        string    `json:"name" gorm:"not null"`
-	Description string    `json:"description" gorm:"type:text"`
-	Steps       Steps     `json:"steps" gorm:"type:json"`
-	CreatedBy   uint      `json:"created_by" gorm:"not null;index:idx_created_by"`
-	Version     uint      `json:"version" gorm:"not null;default:1;index:idx_version"`
-	IsLatest    bool      `json:"is_latest" gorm:"default:true;index:idx_is_latest"`
-	ParentID    *uint     `json:"parent_id,omitempty" gorm:"index:idx_parent_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uuid.UUID  `json:"id" gorm:"type:char(36);primaryKey"`
+	ProjectID   uuid.UUID  `json:"project_id" gorm:"type:char(36);not null;index:idx_project_id"`
+	Name        string     `json:"name" gorm:"not null"`
+	Description string     `json:"description" gorm:"type:text"`
+	Steps       Steps      `json:"steps" gorm:"type:json"`
+	CreatedBy   uuid.UUID  `json:"created_by" gorm:"type:char(36);not null;index:idx_created_by"`
+	Version     uint       `json:"version" gorm:"not null;default:1;index:idx_version"`
+	IsLatest    bool       `json:"is_latest" gorm:"default:true;index:idx_is_latest"`
+	ParentID    *uuid.UUID `json:"parent_id,omitempty" gorm:"type:char(36);index:idx_parent_id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// BeforeCreate hook to generate UUID before creating a new test procedure
+func (tp *TestProcedure) BeforeCreate(tx *gorm.DB) error {
+	if tp.ID == uuid.Nil {
+		tp.ID = uuid.New()
+	}
+	return nil
 }
 
 // Validate checks if the test procedure has valid required fields.
@@ -71,10 +82,10 @@ func (tp *TestProcedure) Validate() error {
 	if tp.Name == "" {
 		return ErrInvalidTestProcedureName
 	}
-	if tp.ProjectID == 0 {
+	if tp.ProjectID == uuid.Nil {
 		return ErrInvalidProjectID
 	}
-	if tp.CreatedBy == 0 {
+	if tp.CreatedBy == uuid.Nil {
 		return ErrInvalidCreatedBy
 	}
 	// Steps can be nil or empty, but if provided, should be valid

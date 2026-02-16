@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testrun"
@@ -77,11 +76,8 @@ func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	procedureIDStr := vars["procedure_id"]
-	procedureID, err := strconv.ParseUint(procedureIDStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	procedureID, ok := parseUUIDOrRespond(w, r, "procedure_id", "test procedure")
+	if !ok {
 		return
 	}
 
@@ -94,7 +90,7 @@ func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Create test run
 	tr := &testrun.TestRun{
-		TestProcedureID: uint(procedureID),
+		TestProcedureID: procedureID,
 		ExecutedBy:      userID,
 		Notes:           req.Notes,
 		Status:          testrun.StatusPending,
@@ -115,11 +111,8 @@ func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 // List handles listing test runs for a test procedure.
 func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
-	vars := mux.Vars(r)
-	procedureIDStr := vars["procedure_id"]
-	procedureID, err := strconv.ParseUint(procedureIDStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test procedure ID")
+	procedureID, ok := parseUUIDOrRespond(w, r, "procedure_id", "test procedure")
+	if !ok {
 		return
 	}
 
@@ -142,7 +135,7 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// List test runs
-	runs, err := h.testRunStore.ListByTestProcedure(r.Context(), uint(procedureID), limit, offset)
+	runs, err := h.testRunStore.ListByTestProcedure(r.Context(), procedureID, limit, offset)
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to list test runs", map[string]interface{}{
 			"error":             err.Error(),
@@ -161,16 +154,13 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 // GetByID handles getting a single test run by ID.
 func (h *TestRunHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// Extract test run ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["run_id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test run ID")
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
 		return
 	}
 
 	// Get test run
-	tr, err := h.testRunStore.GetByID(r.Context(), uint(id))
+	tr, err := h.testRunStore.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, testrun.ErrTestRunNotFound) {
 			respondError(w, http.StatusNotFound, "test run not found")
@@ -190,11 +180,8 @@ func (h *TestRunHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Update handles updating a test run.
 func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Extract test run ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["run_id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test run ID")
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
 		return
 	}
 
@@ -217,7 +204,7 @@ func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update test run
-	if err := h.testRunStore.Update(r.Context(), uint(id), setters...); err != nil {
+	if err := h.testRunStore.Update(r.Context(), id, setters...); err != nil {
 		if errors.Is(err, testrun.ErrTestRunNotFound) {
 			respondError(w, http.StatusNotFound, "test run not found")
 			return
@@ -236,16 +223,13 @@ func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Start handles starting a test run.
 func (h *TestRunHandler) Start(w http.ResponseWriter, r *http.Request) {
 	// Extract test run ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["run_id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test run ID")
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
 		return
 	}
 
 	// Start test run
-	if err := h.testRunStore.Start(r.Context(), uint(id)); err != nil {
+	if err := h.testRunStore.Start(r.Context(), id); err != nil {
 		if errors.Is(err, testrun.ErrTestRunNotFound) {
 			respondError(w, http.StatusNotFound, "test run not found")
 			return
@@ -268,11 +252,8 @@ func (h *TestRunHandler) Start(w http.ResponseWriter, r *http.Request) {
 // Complete handles completing a test run.
 func (h *TestRunHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	// Extract test run ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["run_id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test run ID")
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
 		return
 	}
 
@@ -284,7 +265,7 @@ func (h *TestRunHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Complete test run
-	if err := h.testRunStore.Complete(r.Context(), uint(id), req.Status, req.Notes); err != nil {
+	if err := h.testRunStore.Complete(r.Context(), id, req.Status, req.Notes); err != nil {
 		if errors.Is(err, testrun.ErrTestRunNotFound) {
 			respondError(w, http.StatusNotFound, "test run not found")
 			return
@@ -307,16 +288,13 @@ func (h *TestRunHandler) Complete(w http.ResponseWriter, r *http.Request) {
 // UploadAsset handles uploading an asset for a test run.
 func (h *TestRunHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 	// Extract test run ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["run_id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test run ID")
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
 		return
 	}
 
 	// Verify test run exists
-	_, err = h.testRunStore.GetByID(r.Context(), uint(id))
+	_, err := h.testRunStore.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, testrun.ErrTestRunNotFound) {
 			respondError(w, http.StatusNotFound, "test run not found")
@@ -386,7 +364,7 @@ func (h *TestRunHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 
 	// Create asset record
 	asset := &testrun.TestRunAsset{
-		TestRunID:   uint(id),
+		TestRunID:   id,
 		AssetType:   assetType,
 		AssetPath:   storagePath,
 		FileName:    filename,
@@ -411,16 +389,13 @@ func (h *TestRunHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 // ListAssets handles listing assets for a test run.
 func (h *TestRunHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	// Extract test run ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["run_id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid test run ID")
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
 		return
 	}
 
 	// List assets
-	assets, err := h.assetStore.ListByTestRun(r.Context(), uint(id))
+	assets, err := h.assetStore.ListByTestRun(r.Context(), id)
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to list assets", map[string]interface{}{
 			"error":       err.Error(),
@@ -439,16 +414,13 @@ func (h *TestRunHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 // DownloadAsset handles downloading an asset.
 func (h *TestRunHandler) DownloadAsset(w http.ResponseWriter, r *http.Request) {
 	// Extract asset ID from URL
-	vars := mux.Vars(r)
-	assetIDStr := vars["asset_id"]
-	assetID, err := strconv.ParseUint(assetIDStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid asset ID")
+	assetID, ok := parseUUIDOrRespond(w, r, "asset_id", "asset")
+	if !ok {
 		return
 	}
 
 	// Get asset
-	asset, err := h.assetStore.GetByID(r.Context(), uint(assetID))
+	asset, err := h.assetStore.GetByID(r.Context(), assetID)
 	if err != nil {
 		if errors.Is(err, testrun.ErrAssetNotFound) {
 			respondError(w, http.StatusNotFound, "asset not found")
@@ -494,16 +466,13 @@ func (h *TestRunHandler) DownloadAsset(w http.ResponseWriter, r *http.Request) {
 // DeleteAsset handles deleting an asset.
 func (h *TestRunHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	// Extract asset ID from URL
-	vars := mux.Vars(r)
-	assetIDStr := vars["asset_id"]
-	assetID, err := strconv.ParseUint(assetIDStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid asset ID")
+	assetID, ok := parseUUIDOrRespond(w, r, "asset_id", "asset")
+	if !ok {
 		return
 	}
 
 	// Get asset to get storage path
-	asset, err := h.assetStore.GetByID(r.Context(), uint(assetID))
+	asset, err := h.assetStore.GetByID(r.Context(), assetID)
 	if err != nil {
 		if errors.Is(err, testrun.ErrAssetNotFound) {
 			respondError(w, http.StatusNotFound, "asset not found")
@@ -518,7 +487,7 @@ func (h *TestRunHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete from database first
-	if err := h.assetStore.Delete(r.Context(), uint(assetID)); err != nil {
+	if err := h.assetStore.Delete(r.Context(), assetID); err != nil {
 		h.logger.Error(r.Context(), "failed to delete asset record", map[string]interface{}{
 			"error":    err.Error(),
 			"asset_id": assetID,

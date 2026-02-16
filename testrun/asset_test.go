@@ -3,6 +3,7 @@ package testrun
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,6 +29,7 @@ func TestAssetType_IsValid(t *testing.T) {
 }
 
 func TestTestRunAsset_Validate(t *testing.T) {
+	testRunID := uuid.New()
 	tests := []struct {
 		name    string
 		asset   TestRunAsset
@@ -36,7 +38,7 @@ func TestTestRunAsset_Validate(t *testing.T) {
 		{
 			name: "valid asset",
 			asset: TestRunAsset{
-				TestRunID: 1,
+				TestRunID: testRunID,
 				AssetType: AssetTypeImage,
 				AssetPath: "path/to/file.png",
 				FileName:  "file.png",
@@ -57,7 +59,7 @@ func TestTestRunAsset_Validate(t *testing.T) {
 		{
 			name: "invalid asset type",
 			asset: TestRunAsset{
-				TestRunID: 1,
+				TestRunID: testRunID,
 				AssetType: AssetType("invalid"),
 				AssetPath: "path/to/file.png",
 				FileName:  "file.png",
@@ -68,7 +70,7 @@ func TestTestRunAsset_Validate(t *testing.T) {
 		{
 			name: "missing asset path",
 			asset: TestRunAsset{
-				TestRunID: 1,
+				TestRunID: testRunID,
 				AssetType: AssetTypeImage,
 				FileName:  "file.png",
 				FileSize:  1024,
@@ -78,7 +80,7 @@ func TestTestRunAsset_Validate(t *testing.T) {
 		{
 			name: "missing file name",
 			asset: TestRunAsset{
-				TestRunID: 1,
+				TestRunID: testRunID,
 				AssetType: AssetTypeImage,
 				AssetPath: "path/to/file.png",
 				FileSize:  1024,

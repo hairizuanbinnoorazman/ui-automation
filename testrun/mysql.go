@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"gorm.io/gorm"
 )
@@ -36,22 +37,22 @@ func (s *MySQLStore) Create(ctx context.Context, testRun *TestRun) error {
 	if err := s.db.WithContext(ctx).Create(testRun).Error; err != nil {
 		s.logger.Error(ctx, "failed to create test run", map[string]interface{}{
 			"error":               err.Error(),
-			"test_procedure_id":   testRun.TestProcedureID,
+			"test_procedure_id":   testRun.TestProcedureID.String(),
 			"executed_by":         testRun.ExecutedBy,
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "test run created", map[string]interface{}{
-		"test_run_id":         testRun.ID,
-		"test_procedure_id":   testRun.TestProcedureID,
+		"test_run_id":         testRun.ID.String(),
+		"test_procedure_id":   testRun.TestProcedureID.String(),
 	})
 
 	return nil
 }
 
 // GetByID retrieves a test run by its ID.
-func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*TestRun, error) {
+func (s *MySQLStore) GetByID(ctx context.Context, id uuid.UUID) (*TestRun, error) {
 	var testRun TestRun
 	err := s.db.WithContext(ctx).
 		Where("id = ?", id).
@@ -63,7 +64,7 @@ func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*TestRun, error) {
 		}
 		s.logger.Error(ctx, "failed to get test run by ID", map[string]interface{}{
 			"error":       err.Error(),
-			"test_run_id": id,
+			"test_run_id": id.String(),
 		})
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*TestRun, error) {
 }
 
 // Update updates a test run with the given setters.
-func (s *MySQLStore) Update(ctx context.Context, id uint, setters ...UpdateSetter) error {
+func (s *MySQLStore) Update(ctx context.Context, id uuid.UUID, setters ...UpdateSetter) error {
 	// First, fetch the test run
 	testRun, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -90,20 +91,20 @@ func (s *MySQLStore) Update(ctx context.Context, id uint, setters ...UpdateSette
 	if err := s.db.WithContext(ctx).Save(testRun).Error; err != nil {
 		s.logger.Error(ctx, "failed to update test run", map[string]interface{}{
 			"error":       err.Error(),
-			"test_run_id": id,
+			"test_run_id": id.String(),
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "test run updated", map[string]interface{}{
-		"test_run_id": id,
+		"test_run_id": id.String(),
 	})
 
 	return nil
 }
 
 // ListByTestProcedure retrieves a paginated list of test runs for a specific test procedure.
-func (s *MySQLStore) ListByTestProcedure(ctx context.Context, testProcedureID uint, limit, offset int) ([]*TestRun, error) {
+func (s *MySQLStore) ListByTestProcedure(ctx context.Context, testProcedureID uuid.UUID, limit, offset int) ([]*TestRun, error) {
 	var testRuns []*TestRun
 	err := s.db.WithContext(ctx).
 		Where("test_procedure_id = ?", testProcedureID).
@@ -115,7 +116,7 @@ func (s *MySQLStore) ListByTestProcedure(ctx context.Context, testProcedureID ui
 	if err != nil {
 		s.logger.Error(ctx, "failed to list test runs by test procedure", map[string]interface{}{
 			"error":             err.Error(),
-			"test_procedure_id": testProcedureID,
+			"test_procedure_id": testProcedureID.String(),
 			"limit":             limit,
 			"offset":            offset,
 		})
@@ -126,7 +127,7 @@ func (s *MySQLStore) ListByTestProcedure(ctx context.Context, testProcedureID ui
 }
 
 // Start marks a test run as started (sets started_at, changes status to running).
-func (s *MySQLStore) Start(ctx context.Context, id uint) error {
+func (s *MySQLStore) Start(ctx context.Context, id uuid.UUID) error {
 	// Fetch the test run
 	testRun, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -142,20 +143,20 @@ func (s *MySQLStore) Start(ctx context.Context, id uint) error {
 	if err := s.db.WithContext(ctx).Save(testRun).Error; err != nil {
 		s.logger.Error(ctx, "failed to start test run", map[string]interface{}{
 			"error":       err.Error(),
-			"test_run_id": id,
+			"test_run_id": id.String(),
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "test run started", map[string]interface{}{
-		"test_run_id": id,
+		"test_run_id": id.String(),
 	})
 
 	return nil
 }
 
 // Complete marks a test run as completed (sets completed_at, final status, optional notes).
-func (s *MySQLStore) Complete(ctx context.Context, id uint, status Status, notes string) error {
+func (s *MySQLStore) Complete(ctx context.Context, id uuid.UUID, status Status, notes string) error {
 	// Fetch the test run
 	testRun, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -171,13 +172,13 @@ func (s *MySQLStore) Complete(ctx context.Context, id uint, status Status, notes
 	if err := s.db.WithContext(ctx).Save(testRun).Error; err != nil {
 		s.logger.Error(ctx, "failed to complete test run", map[string]interface{}{
 			"error":       err.Error(),
-			"test_run_id": id,
+			"test_run_id": id.String(),
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "test run completed", map[string]interface{}{
-		"test_run_id": id,
+		"test_run_id": id.String(),
 		"status":      status,
 	})
 

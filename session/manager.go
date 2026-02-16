@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 )
 
@@ -26,11 +27,8 @@ func NewManager(duration time.Duration, log logger.Logger) *Manager {
 }
 
 // Create creates a new session for the given user.
-func (m *Manager) Create(userID uint, email string) (*Session, error) {
-	sessionID, err := generateSessionID()
-	if err != nil {
-		return nil, err
-	}
+func (m *Manager) Create(userID uuid.UUID, email string) (*Session, error) {
+	sessionID := uuid.New()
 
 	now := time.Now()
 	session := &Session{
@@ -44,8 +42,8 @@ func (m *Manager) Create(userID uint, email string) (*Session, error) {
 	m.store.Set(session)
 
 	m.logger.Info(context.Background(), "session created", map[string]interface{}{
-		"session_id": sessionID,
-		"user_id":    userID,
+		"session_id": sessionID.String(),
+		"user_id":    userID.String(),
 		"email":      email,
 	})
 
@@ -53,15 +51,15 @@ func (m *Manager) Create(userID uint, email string) (*Session, error) {
 }
 
 // Get retrieves a session by ID.
-func (m *Manager) Get(sessionID string) (*Session, error) {
+func (m *Manager) Get(sessionID uuid.UUID) (*Session, error) {
 	return m.store.Get(sessionID)
 }
 
 // Delete deletes a session by ID.
-func (m *Manager) Delete(sessionID string) {
+func (m *Manager) Delete(sessionID uuid.UUID) {
 	m.store.Delete(sessionID)
 	m.logger.Info(context.Background(), "session deleted", map[string]interface{}{
-		"session_id": sessionID,
+		"session_id": sessionID.String(),
 	})
 }
 

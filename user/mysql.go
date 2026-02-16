@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"gorm.io/gorm"
 )
@@ -42,7 +43,7 @@ func (s *MySQLStore) Create(ctx context.Context, user *User) error {
 	}
 
 	s.logger.Info(ctx, "user created", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": user.ID.String(),
 		"email":   user.Email,
 	})
 
@@ -50,7 +51,7 @@ func (s *MySQLStore) Create(ctx context.Context, user *User) error {
 }
 
 // GetByID retrieves a user by their ID.
-func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*User, error) {
+func (s *MySQLStore) GetByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
 	err := s.db.WithContext(ctx).
 		Where("id = ? AND is_active = ?", id, true).
@@ -62,7 +63,7 @@ func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*User, error) {
 		}
 		s.logger.Error(ctx, "failed to get user by ID", map[string]interface{}{
 			"error":   err.Error(),
-			"user_id": id,
+			"user_id": id.String(),
 		})
 		return nil, err
 	}
@@ -92,7 +93,7 @@ func (s *MySQLStore) GetByEmail(ctx context.Context, email string) (*User, error
 }
 
 // Update updates a user with the given setters.
-func (s *MySQLStore) Update(ctx context.Context, id uint, setters ...UpdateSetter) error {
+func (s *MySQLStore) Update(ctx context.Context, id uuid.UUID, setters ...UpdateSetter) error {
 	// First, fetch the user
 	user, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -114,20 +115,20 @@ func (s *MySQLStore) Update(ctx context.Context, id uint, setters ...UpdateSette
 		}
 		s.logger.Error(ctx, "failed to update user", map[string]interface{}{
 			"error":   err.Error(),
-			"user_id": id,
+			"user_id": id.String(),
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "user updated", map[string]interface{}{
-		"user_id": id,
+		"user_id": id.String(),
 	})
 
 	return nil
 }
 
 // Delete soft deletes a user by setting is_active to false.
-func (s *MySQLStore) Delete(ctx context.Context, id uint) error {
+func (s *MySQLStore) Delete(ctx context.Context, id uuid.UUID) error {
 	result := s.db.WithContext(ctx).
 		Model(&User{}).
 		Where("id = ? AND is_active = ?", id, true).
@@ -136,7 +137,7 @@ func (s *MySQLStore) Delete(ctx context.Context, id uint) error {
 	if result.Error != nil {
 		s.logger.Error(ctx, "failed to delete user", map[string]interface{}{
 			"error":   result.Error.Error(),
-			"user_id": id,
+			"user_id": id.String(),
 		})
 		return result.Error
 	}
@@ -146,7 +147,7 @@ func (s *MySQLStore) Delete(ctx context.Context, id uint) error {
 	}
 
 	s.logger.Info(ctx, "user deleted", map[string]interface{}{
-		"user_id": id,
+		"user_id": id.String(),
 	})
 
 	return nil

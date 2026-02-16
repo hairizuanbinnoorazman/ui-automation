@@ -1,7 +1,7 @@
 ALTER TABLE test_procedures
     ADD COLUMN version INT UNSIGNED NOT NULL DEFAULT 1,
     ADD COLUMN is_latest BOOLEAN DEFAULT TRUE,
-    ADD COLUMN parent_id BIGINT UNSIGNED NULL,
+    ADD COLUMN parent_id CHAR(36) NULL,
     ADD INDEX idx_parent_id (parent_id),
     ADD INDEX idx_version (version),
     ADD INDEX idx_is_latest (is_latest),

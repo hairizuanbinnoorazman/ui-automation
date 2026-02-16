@@ -3,6 +3,8 @@ package user
 import (
 	"context"
 	"errors"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -19,16 +21,16 @@ type Store interface {
 	Create(ctx context.Context, user *User) error
 
 	// GetByID retrieves a user by their ID.
-	GetByID(ctx context.Context, id uint) (*User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*User, error)
 
 	// GetByEmail retrieves a user by their email address.
 	GetByEmail(ctx context.Context, email string) (*User, error)
 
 	// Update updates a user with the given setters.
-	Update(ctx context.Context, id uint, setters ...UpdateSetter) error
+	Update(ctx context.Context, id uuid.UUID, setters ...UpdateSetter) error
 
 	// Delete soft deletes a user by setting is_active to false.
-	Delete(ctx context.Context, id uint) error
+	Delete(ctx context.Context, id uuid.UUID) error
 
 	// List retrieves a paginated list of active users.
 	List(ctx context.Context, limit, offset int) ([]*User, error)

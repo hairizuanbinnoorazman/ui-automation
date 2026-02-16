@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/securecookie"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/session"
@@ -93,7 +94,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to create session", map[string]interface{}{
 			"error":   err.Error(),
-			"user_id": newUser.ID,
+			"user_id": newUser.ID.String(),
 		})
 		respondError(w, http.StatusInternalServerError, "failed to create session")
 		return
@@ -103,7 +104,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	h.setSessionCookie(w, sess.ID)
 
 	h.logger.Info(r.Context(), "user registered", map[string]interface{}{
-		"user_id": newUser.ID,
+		"user_id": newUser.ID.String(),
 		"email":   newUser.Email,
 	})
 
@@ -147,7 +148,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to create session", map[string]interface{}{
 			"error":   err.Error(),
-			"user_id": existingUser.ID,
+			"user_id": existingUser.ID.String(),
 		})
 		respondError(w, http.StatusInternalServerError, "failed to create session")
 		return
@@ -157,7 +158,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	h.setSessionCookie(w, sess.ID)
 
 	h.logger.Info(r.Context(), "user logged in", map[string]interface{}{
-		"user_id": existingUser.ID,
+		"user_id": existingUser.ID.String(),
 		"email":   existingUser.Email,
 	})
 
@@ -169,8 +170,10 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Extract session cookie
 	cookie, err := r.Cookie(h.cookieName)
 	if err == nil {
-		// Delete session
-		h.sessionManager.Delete(cookie.Value)
+		// Parse and delete session
+		if sessionID, err := uuid.Parse(cookie.Value); err == nil {
+			h.sessionManager.Delete(sessionID)
+		}
 	}
 
 	// Clear cookie
@@ -180,10 +183,10 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // setSessionCookie sets a session cookie in the response.
-func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, sessionID string) {
+func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, sessionID uuid.UUID) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     h.cookieName,
-		Value:    sessionID,
+		Value:    sessionID.String(),
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.cookieSecure,

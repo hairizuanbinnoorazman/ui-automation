@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestTestProcedure_Validate(t *testing.T) {
+	projectID := uuid.New()
+	createdBy := uuid.New()
 	tests := []struct {
 		name          string
 		testProcedure TestProcedure
@@ -18,8 +21,8 @@ func TestTestProcedure_Validate(t *testing.T) {
 			name: "valid test procedure",
 			testProcedure: TestProcedure{
 				Name:      "Test Procedure",
-				ProjectID: 1,
-				CreatedBy: 1,
+				ProjectID: projectID,
+				CreatedBy: createdBy,
 			},
 			wantErr: nil,
 		},
@@ -27,8 +30,8 @@ func TestTestProcedure_Validate(t *testing.T) {
 			name: "valid test procedure with steps",
 			testProcedure: TestProcedure{
 				Name:      "Test Procedure",
-				ProjectID: 1,
-				CreatedBy: 1,
+				ProjectID: projectID,
+				CreatedBy: createdBy,
 				Steps: Steps{
 					{"action": "click", "selector": "#button"},
 					{"action": "type", "selector": "#input", "value": "test"},
@@ -39,8 +42,8 @@ func TestTestProcedure_Validate(t *testing.T) {
 		{
 			name: "missing name",
 			testProcedure: TestProcedure{
-				ProjectID: 1,
-				CreatedBy: 1,
+				ProjectID: projectID,
+				CreatedBy: createdBy,
 			},
 			wantErr: ErrInvalidTestProcedureName,
 		},
@@ -48,7 +51,7 @@ func TestTestProcedure_Validate(t *testing.T) {
 			name: "missing project_id",
 			testProcedure: TestProcedure{
 				Name:      "Test Procedure",
-				CreatedBy: 1,
+				CreatedBy: createdBy,
 			},
 			wantErr: ErrInvalidProjectID,
 		},
@@ -56,7 +59,7 @@ func TestTestProcedure_Validate(t *testing.T) {
 			name: "missing created_by",
 			testProcedure: TestProcedure{
 				Name:      "Test Procedure",
-				ProjectID: 1,
+				ProjectID: projectID,
 			},
 			wantErr: ErrInvalidCreatedBy,
 		},
