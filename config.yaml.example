@@ -1,0 +1,23 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 15s
+  write_timeout: 15s
+
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: password
+  database: ui_automation
+  max_open_conns: 25
+  max_idle_conns: 5
+
+session:
+  cookie_name: session_id
+  cookie_secret: change-this-secret-in-production-min-32-chars
+  duration: 24h
+  secure: false  # Set to true in production (requires HTTPS)
+
+log:
+  level: info
