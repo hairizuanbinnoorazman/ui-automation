@@ -22,6 +22,7 @@ import (
 	"github.com/hairizuanbinnoorazman/ui-automation/job"
 	"github.com/hairizuanbinnoorazman/ui-automation/logger"
 	"github.com/hairizuanbinnoorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/scriptgen"
 	"github.com/hairizuanbinnoorazman/ui-automation/session"
 	"github.com/hairizuanbinnoorazman/ui-automation/storage"
 	"github.com/hairizuanbinnoorazman/ui-automation/testprocedure"
@@ -122,6 +123,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	jobStore := job.NewMySQLStore(db, log)
 	apiTokenStore := apitoken.NewMySQLStore(db, log)
 	integrationStore := integration.NewMySQLStore(db, log)
+	scriptStore := scriptgen.NewMySQLStore(db, log)
 
 	// Initialize agent pipeline
 	agentCfg := agent.Config{
@@ -142,6 +144,28 @@ func runServer(cmd *cobra.Command, args []string) error {
 	poolCtx, poolCancel := context.WithCancel(ctx)
 	defer poolCancel()
 	workerPool.Start(poolCtx)
+
+	// Initialize script generator based on config provider
+	var scriptGenerator scriptgen.ScriptGenerator
+	switch cfg.ScriptGen.Provider {
+	case "bedrock":
+		scriptGenerator, err = scriptgen.NewBedrockGenerator(
+			cfg.ScriptGen.Region,
+			cfg.ScriptGen.ModelID,
+			cfg.ScriptGen.MaxTokens,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize Bedrock generator: %w", err)
+		}
+		log.Info(ctx, "script generator initialized", map[string]interface{}{
+			"provider":   "bedrock",
+			"region":     cfg.ScriptGen.Region,
+			"model":      cfg.ScriptGen.ModelID,
+			"max_tokens": cfg.ScriptGen.MaxTokens,
+		})
+	default:
+		return fmt.Errorf("unsupported script generator provider: %s", cfg.ScriptGen.Provider)
+	}
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -309,6 +333,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/runs/{run_id}/issues/{link_id}", integrationHandler.UnlinkIssue).Methods("DELETE")
 	apiRouter.HandleFunc("/runs/{run_id}/issues/{link_id}/resolve", integrationHandler.ResolveLinkedIssue).Methods("POST")
 	apiRouter.HandleFunc("/runs/{run_id}/issues/{link_id}/sync", integrationHandler.SyncIssueStatus).Methods("POST")
+
+	// Script Generation routes (protected)
+	scriptGenHandler := handlers.NewScriptGenHandler(
+		scriptStore,
+		testProcedureStore,
+		scriptGenerator,
+		blobStorage,
+		log,
+	)
+
+	// Generate and list scripts for a procedure
+	apiRouter.HandleFunc("/procedures/{procedure_id}/scripts", scriptGenHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/procedures/{procedure_id}/scripts", scriptGenHandler.Generate).Methods("POST")
+
+	// Individual script operations
+	apiRouter.HandleFunc("/scripts/{script_id}", scriptGenHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/scripts/{script_id}/download", scriptGenHandler.Download).Methods("GET")
+	apiRouter.HandleFunc("/scripts/{script_id}", scriptGenHandler.Delete).Methods("DELETE")
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

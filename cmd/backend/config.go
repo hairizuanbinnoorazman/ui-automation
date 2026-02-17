@@ -32,6 +32,7 @@ type Config struct {
 	Database    DatabaseConfig
 	Session     SessionConfig
 	Storage     StorageConfig
+	ScriptGen   ScriptGenConfig
 	Log         LogConfig
 	Agent       AgentConfig
 	Integration IntegrationConfig
@@ -71,6 +72,14 @@ type StorageConfig struct {
 	S3Bucket        string        // For S3: bucket name
 	S3Region        string        // For S3: AWS region
 	S3PresignExpiry time.Duration // Presigned URL expiration
+}
+
+// ScriptGenConfig holds script generation configuration.
+type ScriptGenConfig struct {
+	Provider  string // "bedrock" (future: "openai", "local")
+	Region    string // AWS region for Bedrock
+	ModelID   string // Bedrock model ID (e.g., "anthropic.claude-v2")
+	MaxTokens int    // Max tokens for generation
 }
 
 // LogConfig holds logging configuration.
@@ -121,6 +130,11 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("storage.s3_region", "us-east-1")
 	v.SetDefault("storage.s3_presign_expiry", "15m")
 
+	v.SetDefault("script_gen.provider", "bedrock")
+	v.SetDefault("script_gen.region", "us-east-1")
+	v.SetDefault("script_gen.model_id", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+	v.SetDefault("script_gen.max_tokens", 4096)
+
 	v.SetDefault("log.level", "info")
 
 	v.SetDefault("agent.max_iterations", 50)
@@ -169,6 +183,11 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Storage.S3Bucket = v.GetString("storage.s3_bucket")
 	config.Storage.S3Region = v.GetString("storage.s3_region")
 	config.Storage.S3PresignExpiry = v.GetDuration("storage.s3_presign_expiry")
+
+	config.ScriptGen.Provider = v.GetString("script_gen.provider")
+	config.ScriptGen.Region = v.GetString("script_gen.region")
+	config.ScriptGen.ModelID = v.GetString("script_gen.model_id")
+	config.ScriptGen.MaxTokens = v.GetInt("script_gen.max_tokens")
 
 	config.Log.Level = v.GetString("log.level")
 
