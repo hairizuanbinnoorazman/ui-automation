@@ -98,7 +98,7 @@ update msg model =
         RunsResponse (Ok response) ->
             ( { model
                 | runs = response.items
-                | total = response.total
+                , total = response.total
                 , loading = False
                 , error = Nothing
               }

@@ -193,7 +193,11 @@ testStepDecoder =
 
 testProcedureDecoder : Decoder TestProcedure
 testProcedureDecoder =
-    Decode.map10 TestProcedure
+    Decode.map8
+        (\id projectId name description steps version isLatest parentId ->
+            \createdAt updatedAt deletedAt ->
+                TestProcedure id projectId name description steps version isLatest parentId createdAt updatedAt deletedAt
+        )
         (Decode.field "id" Decode.string)
         (Decode.field "project_id" Decode.string)
         (Decode.field "name" Decode.string)
@@ -202,9 +206,13 @@ testProcedureDecoder =
         (Decode.field "version" Decode.int)
         (Decode.field "is_latest" Decode.bool)
         (Decode.maybe (Decode.field "parent_id" Decode.string))
-        (Decode.field "created_at" timeDecoder)
-        (Decode.field "updated_at" timeDecoder)
-        (Decode.maybe (Decode.field "deleted_at" timeDecoder))
+        |> Decode.andThen
+            (\fn ->
+                Decode.map3 fn
+                    (Decode.field "created_at" timeDecoder)
+                    (Decode.field "updated_at" timeDecoder)
+                    (Decode.maybe (Decode.field "deleted_at" timeDecoder))
+            )
 
 
 testRunStatusDecoder : Decoder TestRunStatus
@@ -271,7 +279,7 @@ assetTypeDecoder =
 
 testRunAssetDecoder : Decoder TestRunAsset
 testRunAssetDecoder =
-    Decode.map6 TestRunAsset
+    Decode.map7 TestRunAsset
         (Decode.field "id" Decode.string)
         (Decode.field "test_run_id" Decode.string)
         (Decode.field "asset_type" assetTypeDecoder)
