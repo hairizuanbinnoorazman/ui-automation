@@ -500,8 +500,7 @@ viewTopAppBar model =
               else
                 Html.text ""
             , Html.h1
-                [ Html.Attributes.class "mdc-top-app-bar__title"
-                , Html.Attributes.style "margin" "0"
+                [ Html.Attributes.style "margin" "0"
                 , Html.Attributes.style "font-size" "20px"
                 , Html.Attributes.style "font-weight" "500"
                 ]
