@@ -1,0 +1,7 @@
+elm-stuff/
+elm.js
+elm.min.js
+node_modules/
+*.md
+Makefile
+.gitignore

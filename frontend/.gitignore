@@ -1,0 +1,19 @@
+# Elm
+elm-stuff/
+elm.js
+elm.min.js
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if using npm for development tools)
+node_modules/
+package-lock.json

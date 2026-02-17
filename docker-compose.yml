@@ -1,21 +1,96 @@
 version: '3.8'
 
 services:
+  # Nginx reverse proxy serving Elm frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ui-automation-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ui-automation-network
+
+  # Go backend API
+  backend:
+    build:
+      context: .
+      dockerfile: cmd/backend/Dockerfile
+    container_name: ui-automation-backend
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=password
+      - DATABASE_DATABASE=ui_automation
+      - SESSION_COOKIE_NAME=session_id
+      - SESSION_COOKIE_SECRET=change-this-secret-in-production-min-32-chars
+      - SESSION_DURATION=24h
+      - SESSION_SECURE=false
+      - STORAGE_TYPE=local
+      - STORAGE_BASE_DIR=/uploads
+      - LOG_LEVEL=info
+    volumes:
+      - uploads_data:/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ui-automation-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Database migration (runs once on startup)
+  migrate:
+    build:
+      context: .
+      dockerfile: cmd/backend/Dockerfile
+    container_name: ui-automation-migrate
+    environment:
+      - DATABASE_HOST=mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=password
+      - DATABASE_DATABASE=ui_automation
+    command: ["./backend", "migrate", "up", "-p", "database/migrations"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ui-automation-network
+    restart: on-failure
+
+  # MySQL database
   mysql:
     image: mysql:8
     container_name: ui-automation-db
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: ui_automation
-    ports:
-      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - ui-automation-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+networks:
+  ui-automation-network:
+    driver: bridge
+
 volumes:
   mysql_data:
+  uploads_data:

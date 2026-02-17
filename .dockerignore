@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+.claude
+bin/
+uploads/
+*.md
+Makefile
+frontend/
+config.yaml
+*_test.go
+.vscode/
+.idea/

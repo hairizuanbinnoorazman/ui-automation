@@ -40,3 +40,6 @@ Thumbs.db
 
 # Session files
 cookies.txt
+
+# Generated JS files
+frontend/*.js

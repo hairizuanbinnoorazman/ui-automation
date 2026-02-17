@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -70,6 +71,7 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Enable environment variable overrides
 	v.AutomaticEnv()
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Set defaults
 	v.SetDefault("server.host", "0.0.0.0")
