@@ -20,9 +20,10 @@ type alias Model =
     , offset : Int
     , loading : Bool
     , error : Maybe String
-    , createDialog : DialogState
+    , createDialog : Maybe DialogState
     , editDialog : Maybe EditDialogState
     , deleteDialog : Maybe Project
+    , navigationTarget : Maybe String
     }
 
 
@@ -47,9 +48,10 @@ init =
       , offset = 0
       , loading = False
       , error = Nothing
-      , createDialog = { name = "", description = "" }
+      , createDialog = Nothing
       , editDialog = Nothing
       , deleteDialog = Nothing
+      , navigationTarget = Nothing
       }
     , API.getProjects 10 0 ProjectsResponse
     )
@@ -78,6 +80,7 @@ type Msg
     | CloseDeleteDialog
     | ConfirmDelete String
     | DeleteResponse (Result Http.Error ())
+    | NavigateToProcedures String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -107,46 +110,54 @@ update msg model =
             )
 
         OpenCreateDialog ->
-            ( { model | createDialog = { name = "", description = "" } }
+            ( { model | createDialog = Just { name = "", description = "" } }
             , Cmd.none
             )
 
         CloseCreateDialog ->
-            ( { model | createDialog = { name = "", description = "" } }
+            ( { model | createDialog = Nothing }
             , Cmd.none
             )
 
         SetCreateName name ->
-            let
-                dialog =
-                    model.createDialog
-            in
-            ( { model | createDialog = { dialog | name = name } }
-            , Cmd.none
-            )
+            case model.createDialog of
+                Just dialog ->
+                    ( { model | createDialog = Just { dialog | name = name } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         SetCreateDescription description ->
-            let
-                dialog =
-                    model.createDialog
-            in
-            ( { model | createDialog = { dialog | description = description } }
-            , Cmd.none
-            )
+            case model.createDialog of
+                Just dialog ->
+                    ( { model | createDialog = Just { dialog | description = description } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         SubmitCreate ->
-            ( { model | loading = True }
-            , API.createProject
-                { name = model.createDialog.name
-                , description = model.createDialog.description
-                }
-                CreateResponse
-            )
+            case model.createDialog of
+                Just dialog ->
+                    ( { model | loading = True }
+                    , API.createProject
+                        { name = dialog.name
+                        , description = dialog.description
+                        }
+                        CreateResponse
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         CreateResponse (Ok project) ->
             ( { model
                 | loading = False
-                , createDialog = { name = "", description = "" }
+                , createDialog = Nothing
+                , navigationTarget = Just project.id
               }
             , API.getProjects model.limit model.offset ProjectsResponse
             )
@@ -258,6 +269,11 @@ update msg model =
             , Cmd.none
             )
 
+        NavigateToProcedures projectId ->
+            ( { model | navigationTarget = Just projectId }
+            , Cmd.none
+            )
+
 
 
 -- VIEW
@@ -292,7 +308,7 @@ view model =
           else
             viewProjectsTable model.projects
         , viewPagination model
-        , viewCreateDialog model
+        , viewCreateDialog model.createDialog
         , case model.editDialog of
             Just dialog ->
                 viewEditDialog dialog
@@ -336,6 +352,12 @@ viewProjectRow project =
         , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (formatTime project.createdAt) ]
         , Html.td [ Html.Attributes.style "padding" "12px" ]
             [ Html.button
+                [ Html.Events.onClick (NavigateToProcedures project.id)
+                , Html.Attributes.class "mdc-button mdc-button--raised"
+                , Html.Attributes.style "margin-right" "8px"
+                ]
+                [ Html.text "View Procedures" ]
+            , Html.button
                 [ Html.Events.onClick (OpenEditDialog project)
                 , Html.Attributes.class "mdc-button"
                 , Html.Attributes.style "margin-right" "8px"
@@ -395,53 +417,50 @@ viewPagination model =
         ]
 
 
-viewCreateDialog : Model -> Html Msg
-viewCreateDialog model =
-    let
-        isOpen =
-            not (String.isEmpty model.createDialog.name && String.isEmpty model.createDialog.description)
-    in
-    if isOpen then
-        viewDialogOverlay "Create Project"
-            [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-                [ Html.label [] [ Html.text "Name" ]
-                , Html.input
-                    [ Html.Attributes.type_ "text"
-                    , Html.Attributes.value model.createDialog.name
-                    , Html.Events.onInput SetCreateName
-                    , Html.Attributes.required True
-                    , Html.Attributes.style "width" "100%"
-                    , Html.Attributes.style "padding" "8px"
+viewCreateDialog : Maybe DialogState -> Html Msg
+viewCreateDialog maybeDialog =
+    case maybeDialog of
+        Just dialog ->
+            viewDialogOverlay "Create Project"
+                [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+                    [ Html.label [] [ Html.text "Name" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "text"
+                        , Html.Attributes.value dialog.name
+                        , Html.Events.onInput SetCreateName
+                        , Html.Attributes.required True
+                        , Html.Attributes.style "width" "100%"
+                        , Html.Attributes.style "padding" "8px"
+                        ]
+                        []
                     ]
-                    []
-                ]
-            , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-                [ Html.label [] [ Html.text "Description" ]
-                , Html.input
-                    [ Html.Attributes.type_ "text"
-                    , Html.Attributes.value model.createDialog.description
-                    , Html.Events.onInput SetCreateDescription
-                    , Html.Attributes.required True
-                    , Html.Attributes.style "width" "100%"
-                    , Html.Attributes.style "padding" "8px"
+                , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+                    [ Html.label [] [ Html.text "Description" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "text"
+                        , Html.Attributes.value dialog.description
+                        , Html.Events.onInput SetCreateDescription
+                        , Html.Attributes.required True
+                        , Html.Attributes.style "width" "100%"
+                        , Html.Attributes.style "padding" "8px"
+                        ]
+                        []
                     ]
-                    []
                 ]
-            ]
-            [ Html.button
-                [ Html.Events.onClick CloseCreateDialog
-                , Html.Attributes.class "mdc-button"
+                [ Html.button
+                    [ Html.Events.onClick CloseCreateDialog
+                    , Html.Attributes.class "mdc-button"
+                    ]
+                    [ Html.text "Cancel" ]
+                , Html.button
+                    [ Html.Events.onClick SubmitCreate
+                    , Html.Attributes.class "mdc-button mdc-button--raised"
+                    ]
+                    [ Html.text "Create" ]
                 ]
-                [ Html.text "Cancel" ]
-            , Html.button
-                [ Html.Events.onClick SubmitCreate
-                , Html.Attributes.class "mdc-button mdc-button--raised"
-                ]
-                [ Html.text "Create" ]
-            ]
 
-    else
-        Html.text ""
+        Nothing ->
+            Html.text ""
 
 
 viewEditDialog : EditDialogState -> Html Msg

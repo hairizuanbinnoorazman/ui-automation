@@ -228,9 +228,19 @@ update msg model =
                         ( newProjectsModel, cmd ) =
                             Projects.update subMsg projectsModel
                     in
-                    ( { model | projectsModel = Just newProjectsModel }
-                    , Cmd.map ProjectsMsg cmd
-                    )
+                    case newProjectsModel.navigationTarget of
+                        Just projectId ->
+                            ( { model | projectsModel = Just { newProjectsModel | navigationTarget = Nothing } }
+                            , Cmd.batch
+                                [ Cmd.map ProjectsMsg cmd
+                                , Nav.pushUrl model.key ("/projects/" ++ projectId ++ "/procedures")
+                                ]
+                            )
+
+                        Nothing ->
+                            ( { model | projectsModel = Just newProjectsModel }
+                            , Cmd.map ProjectsMsg cmd
+                            )
 
                 Nothing ->
                     ( model, Cmd.none )
