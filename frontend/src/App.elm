@@ -521,18 +521,18 @@ viewTopAppBar model =
                         [ Html.text user.username ]
                     , Html.button
                         [ Html.Events.onClick Logout
-                        , Html.Attributes.class "mdc-icon-button"
                         , Html.Attributes.style "color" "white"
-                        , Html.Attributes.style "background" "none"
-                        , Html.Attributes.style "border" "none"
+                        , Html.Attributes.style "background" "rgba(255, 255, 255, 0.1)"
+                        , Html.Attributes.style "border" "1px solid rgba(255, 255, 255, 0.3)"
+                        , Html.Attributes.style "border-radius" "4px"
                         , Html.Attributes.style "cursor" "pointer"
-                        , Html.Attributes.style "font-size" "20px"
-                        , Html.Attributes.style "padding" "8px"
+                        , Html.Attributes.style "font-size" "14px"
+                        , Html.Attributes.style "padding" "6px 12px"
                         , Html.Attributes.style "display" "flex"
                         , Html.Attributes.style "align-items" "center"
-                        , Html.Attributes.attribute "title" "Logout"
+                        , Html.Attributes.style "transition" "background 0.2s"
                         ]
-                        [ Html.text "⎋" ]
+                        [ Html.text "Logout" ]
                     ]
 
             Nothing ->
