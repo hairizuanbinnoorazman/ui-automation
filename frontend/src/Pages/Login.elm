@@ -20,6 +20,7 @@ type alias Model =
     , confirmPassword : String
     , error : Maybe String
     , loading : Bool
+    , successfulUser : Maybe User
     }
 
 
@@ -37,6 +38,7 @@ init =
     , confirmPassword = ""
     , error = Nothing
     , loading = False
+    , successfulUser = Nothing
     }
 
 
@@ -117,7 +119,10 @@ update msg model =
                 )
 
         LoginResponse (Ok user) ->
-            ( { model | loading = False }
+            ( { model
+                | loading = False
+                , successfulUser = Just user
+              }
             , Cmd.none
             )
 
@@ -130,7 +135,10 @@ update msg model =
             )
 
         RegisterResponse (Ok user) ->
-            ( { model | loading = False }
+            ( { model
+                | loading = False
+                , successfulUser = Just user
+              }
             , Cmd.none
             )
 

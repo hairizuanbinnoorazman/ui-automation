@@ -174,7 +174,21 @@ update msg model =
                 ( newLoginModel, cmd ) =
                     Login.update subMsg model.loginModel
             in
-            ( { model | loginModel = newLoginModel }, Cmd.map LoginMsg cmd )
+            case newLoginModel.successfulUser of
+                Just user ->
+                    ( { model
+                        | loginModel = { newLoginModel | successfulUser = Nothing }
+                        , user = Just user
+                        , route = Projects
+                      }
+                    , Cmd.batch
+                        [ Cmd.map LoginMsg cmd
+                        , Nav.pushUrl model.key "/projects"
+                        ]
+                    )
+
+                Nothing ->
+                    ( { model | loginModel = newLoginModel }, Cmd.map LoginMsg cmd )
 
         ProjectsMsg subMsg ->
             case model.projectsModel of
