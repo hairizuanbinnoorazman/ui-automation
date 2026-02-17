@@ -13,9 +13,10 @@ import (
 
 // BedrockGenerator implements ScriptGenerator using AWS Bedrock.
 type BedrockGenerator struct {
-	client    *bedrockruntime.Client
-	modelID   string
-	maxTokens int
+	client         *bedrockruntime.Client
+	modelID        string
+	maxTokens      int
+	validationCfg  *ValidationConfig
 }
 
 // NewBedrockGenerator creates a new Bedrock-based script generator.
@@ -31,19 +32,29 @@ func NewBedrockGenerator(region, modelID string, maxTokens int) (*BedrockGenerat
 	client := bedrockruntime.NewFromConfig(cfg)
 
 	return &BedrockGenerator{
-		client:    client,
-		modelID:   modelID,
-		maxTokens: maxTokens,
+		client:        client,
+		modelID:       modelID,
+		maxTokens:     maxTokens,
+		validationCfg: DefaultValidationConfig(),
 	}, nil
+}
+
+// SetValidationConfig sets the validation configuration for the generator.
+func (g *BedrockGenerator) SetValidationConfig(cfg *ValidationConfig) {
+	g.validationCfg = cfg
 }
 
 // Generate creates a Python automation script using AWS Bedrock.
 func (g *BedrockGenerator) Generate(ctx context.Context, procedure *testprocedure.TestProcedure, framework Framework) ([]byte, error) {
-	// Build the prompt
-	prompt, err := BuildPrompt(procedure, framework)
+	// Build the prompt with validation and sanitization
+	prompt, err := BuildPrompt(procedure, framework, g.validationCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build prompt: %w", err)
 	}
+
+	// TODO: Add security logging here if logger is available
+	// Log if description exceeds warning threshold (2000 chars)
+	// Log if suspicious patterns detected but not blocked
 
 	// Prepare the request payload for Claude models
 	// Format depends on the model being used
