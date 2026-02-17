@@ -116,7 +116,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	var scriptGenerator scriptgen.ScriptGenerator
 	switch cfg.ScriptGen.Provider {
 	case "bedrock":
-		scriptGenerator, err = scriptgen.NewBedrockGenerator(
+		bedrockGen, err := scriptgen.NewBedrockGenerator(
 			cfg.ScriptGen.Region,
 			cfg.ScriptGen.ModelID,
 			cfg.ScriptGen.MaxTokens,
@@ -124,11 +124,26 @@ func runServer(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize Bedrock generator: %w", err)
 		}
+
+		// Configure validation settings
+		validationCfg := &scriptgen.ValidationConfig{
+			MaxNameLength:        cfg.ScriptGen.Validation.MaxNameLength,
+			MaxDescriptionLength: cfg.ScriptGen.Validation.MaxDescriptionLength,
+			MaxStepsJSONLength:   cfg.ScriptGen.Validation.MaxStepsJSONLength,
+			MaxStepsCount:        cfg.ScriptGen.Validation.MaxStepsCount,
+		}
+		bedrockGen.SetValidationConfig(validationCfg)
+
+		scriptGenerator = bedrockGen
+
 		log.Info(ctx, "script generator initialized", map[string]interface{}{
-			"provider":   "bedrock",
-			"region":     cfg.ScriptGen.Region,
-			"model":      cfg.ScriptGen.ModelID,
-			"max_tokens": cfg.ScriptGen.MaxTokens,
+			"provider":                "bedrock",
+			"region":                  cfg.ScriptGen.Region,
+			"model":                   cfg.ScriptGen.ModelID,
+			"max_tokens":              cfg.ScriptGen.MaxTokens,
+			"max_name_length":         cfg.ScriptGen.Validation.MaxNameLength,
+			"max_description_length":  cfg.ScriptGen.Validation.MaxDescriptionLength,
+			"max_steps_count":         cfg.ScriptGen.Validation.MaxStepsCount,
 		})
 	default:
 		return fmt.Errorf("unsupported script generator provider: %s", cfg.ScriptGen.Provider)

@@ -8,9 +8,42 @@ import (
 )
 
 // BuildPrompt constructs a prompt for the LLM to generate an automation script.
-func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework) (string, error) {
-	// Marshal steps to JSON for readability
-	stepsJSON, err := json.MarshalIndent(procedure.Steps, "", "  ")
+// It validates and sanitizes all user-provided content before embedding it in the prompt
+// to prevent prompt injection attacks.
+func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework, config *ValidationConfig) (string, error) {
+	// Validate length limits first
+	if config == nil {
+		config = DefaultValidationConfig()
+	}
+
+	if err := ValidateLengthLimits(procedure, config); err != nil {
+		return "", fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Validate using testprocedure package validators
+	limits := testprocedure.ValidationLimits{
+		MaxNameLength:        config.MaxNameLength,
+		MaxDescriptionLength: config.MaxDescriptionLength,
+		MaxStepsJSONLength:   config.MaxStepsJSONLength,
+		MaxStepsCount:        config.MaxStepsCount,
+	}
+
+	if err := testprocedure.ValidateForScriptGeneration(procedure, limits); err != nil {
+		return "", fmt.Errorf("security validation failed: %w", err)
+	}
+
+	// Sanitize all user-provided content
+	sanitizedName := SanitizeTestProcedureName(procedure.Name)
+	sanitizedDescription := SanitizeTestProcedureDescription(procedure.Description)
+
+	// Sanitize and validate steps
+	sanitizedSteps, err := SanitizeSteps(procedure.Steps)
+	if err != nil {
+		return "", fmt.Errorf("failed to sanitize steps: %w", err)
+	}
+
+	// Marshal sanitized steps to JSON for readability
+	stepsJSON, err := json.MarshalIndent(sanitizedSteps, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal steps: %w", err)
 	}
@@ -20,16 +53,21 @@ func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework) (s
 		frameworkName = "Playwright"
 	}
 
-	prompt := fmt.Sprintf(`Generate a Python automation script using %s for the following test procedure:
+	// Use XML-style tags to create clear boundaries between instructions and user data
+	// This follows Anthropic's prompt engineering best practices and makes it harder
+	// to "break out" of the user data section.
+	prompt := fmt.Sprintf(`Generate a Python automation script using %s for the following test procedure.
 
-Name: %s
-Version: %d
-Description: %s
-
-Test Steps:
+<test_procedure>
+<name>%s</name>
+<version>%d</version>
+<description>%s</description>
+<test_steps>
 %s
+</test_steps>
+</test_procedure>
 
-Requirements:
+<requirements>
 - Use Python 3.x syntax
 - Include proper error handling and try-except blocks
 - Add docstrings for the main test class and methods
@@ -54,11 +92,11 @@ The script should:
 4. Clean up resources (close browser) in a finally block
 5. Print progress messages as it executes each step
 6. Exit with appropriate status code (0 for success, non-zero for failure)
-`,
+</requirements>`,
 		frameworkName,
-		procedure.Name,
+		sanitizedName,
 		procedure.Version,
-		procedure.Description,
+		sanitizedDescription,
 		string(stepsJSON),
 		getFrameworkSpecificInstructions(framework),
 	)
