@@ -20,8 +20,15 @@ session:
   secure: false  # Set to true in production (requires HTTPS)
 
 storage:
-  type: local  # "local" (future: "s3", "gcs")
-  base_dir: ./uploads
+  type: local  # "local" or "s3"
+  base_dir: ./uploads  # For local storage
+
+  # S3 Configuration (only needed when type: s3)
+  # IAM role authentication is used automatically on EC2
+  # No access keys needed in config
+  s3_bucket: ""  # e.g., "my-app-test-runs"
+  s3_region: us-east-1  # e.g., "us-east-1", "eu-west-1"
+  s3_presign_expiry: 15m  # Presigned URL expiration (default: 15m)
 
 log:
   level: info

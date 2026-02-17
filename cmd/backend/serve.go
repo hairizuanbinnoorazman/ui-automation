@@ -81,14 +81,27 @@ func runServer(cmd *cobra.Command, args []string) error {
 	})
 
 	// Initialize storage
-	blobStorage, err := storage.NewLocalStorage(cfg.Storage.BaseDir)
+	storageConfig := map[string]interface{}{
+		"base_dir":       cfg.Storage.BaseDir,
+		"bucket":         cfg.Storage.S3Bucket,
+		"region":         cfg.Storage.S3Region,
+		"presign_expiry": cfg.Storage.S3PresignExpiry,
+	}
+
+	blobStorage, err := storage.NewBlobStorage(cfg.Storage.Type, storageConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
-	log.Info(ctx, "storage initialized", map[string]interface{}{
-		"type":     cfg.Storage.Type,
-		"base_dir": cfg.Storage.BaseDir,
-	})
+
+	// Log storage initialization
+	logFields := map[string]interface{}{"type": cfg.Storage.Type}
+	if cfg.Storage.Type == "local" {
+		logFields["base_dir"] = cfg.Storage.BaseDir
+	} else if cfg.Storage.Type == "s3" {
+		logFields["bucket"] = cfg.Storage.S3Bucket
+		logFields["region"] = cfg.Storage.S3Region
+	}
+	log.Info(ctx, "storage initialized", logFields)
 
 	// Initialize stores
 	userStore := user.NewMySQLStore(db, log)
