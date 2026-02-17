@@ -46,8 +46,11 @@ type SessionConfig struct {
 
 // StorageConfig holds blob storage configuration.
 type StorageConfig struct {
-	Type    string // "local" (future: "s3", "gcs")
-	BaseDir string // default: "./uploads"
+	Type            string        // "local" or "s3"
+	BaseDir         string        // For local: "./uploads"
+	S3Bucket        string        // For S3: bucket name
+	S3Region        string        // For S3: AWS region
+	S3PresignExpiry time.Duration // Presigned URL expiration
 }
 
 // LogConfig holds logging configuration.
@@ -94,6 +97,9 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	v.SetDefault("storage.type", "local")
 	v.SetDefault("storage.base_dir", "./uploads")
+	v.SetDefault("storage.s3_bucket", "")
+	v.SetDefault("storage.s3_region", "us-east-1")
+	v.SetDefault("storage.s3_presign_expiry", "15m")
 
 	v.SetDefault("log.level", "info")
 
@@ -128,6 +134,9 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	config.Storage.Type = v.GetString("storage.type")
 	config.Storage.BaseDir = v.GetString("storage.base_dir")
+	config.Storage.S3Bucket = v.GetString("storage.s3_bucket")
+	config.Storage.S3Region = v.GetString("storage.s3_region")
+	config.Storage.S3PresignExpiry = v.GetDuration("storage.s3_presign_expiry")
 
 	config.Log.Level = v.GetString("log.level")
 
