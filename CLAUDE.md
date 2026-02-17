@@ -47,17 +47,40 @@ make serve  # Uses Python HTTP server on port 8000
 ```
 
 ### Docker Compose (Full Stack)
+
 ```bash
-# Start entire stack (frontend, backend, database, migrations)
-docker-compose up
+# First-time setup: Build Elm locally
+cd frontend
+elm make src/App.elm --output=elm.js
+cd ..
 
-# Rebuild and start
-docker-compose up --build
+# Start entire stack
+docker compose up
 
-# Backend runs on internal port 8080
-# Frontend (Nginx) exposes port 8080 and proxies to backend
-# Access application at http://localhost:8080
+# Or use Make target (auto-builds elm.js if missing)
+make docker-dev
+
+# After making changes to Elm source:
+cd frontend
+elm make src/App.elm --output=elm.js
+# Refresh browser - changes are immediately visible
 ```
+
+The docker-compose setup mounts locally-built `elm.js` into the frontend container. This allows instant feedback without rebuilding the container.
+
+**Architecture:**
+- Backend runs on internal port 8080
+- Frontend (Nginx) exposes port 8080 and proxies to backend
+- Access application at http://localhost:8080
+
+**For standalone container builds** (without Docker Compose):
+```bash
+cd frontend
+docker build -t ui-automation-frontend .
+docker run -p 8080:80 ui-automation-frontend
+```
+
+The Dockerfile still builds Elm from source for self-contained deployments.
 
 ### Integration Testing
 ```bash

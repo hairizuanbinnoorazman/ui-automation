@@ -8,6 +8,7 @@ import Html.Attributes
 import Html.Events
 import Http
 import Pages.Login as Login
+import Pages.Register as Register
 import Pages.Projects as Projects
 import Pages.TestProcedures as TestProcedures
 import Pages.TestRuns as TestRuns
@@ -43,6 +44,7 @@ type alias Model =
     , user : Maybe User
     , drawerOpen : Bool
     , loginModel : Login.Model
+    , registerModel : Register.Model
     , projectsModel : Maybe Projects.Model
     , testProceduresModel : Maybe TestProcedures.Model
     , testRunsModel : Maybe TestRuns.Model
@@ -51,6 +53,7 @@ type alias Model =
 
 type Route
     = Login
+    | Register
     | Projects
     | TestProcedures String
     | TestRuns String
@@ -84,6 +87,7 @@ init _ url key =
       , user = Nothing
       , drawerOpen = False
       , loginModel = loginModel
+      , registerModel = Register.init
       , projectsModel = projectsModel
       , testProceduresModel = Nothing
       , testRunsModel = Nothing
@@ -104,6 +108,7 @@ type Msg
     | UrlChanged Url.Url
     | ToggleDrawer
     | LoginMsg Login.Msg
+    | RegisterMsg Register.Msg
     | ProjectsMsg Projects.Msg
     | TestProceduresMsg TestProcedures.Msg
     | TestRunsMsg TestRuns.Msg
@@ -129,6 +134,11 @@ update msg model =
 
                 ( newModel, cmd ) =
                     case route of
+                        Register ->
+                            ( { model | registerModel = Register.init }
+                            , Cmd.none
+                            )
+
                         Projects ->
                             case model.projectsModel of
                                 Just _ ->
@@ -189,6 +199,27 @@ update msg model =
 
                 Nothing ->
                     ( { model | loginModel = newLoginModel }, Cmd.map LoginMsg cmd )
+
+        RegisterMsg subMsg ->
+            let
+                ( newRegisterModel, cmd ) =
+                    Register.update subMsg model.registerModel
+            in
+            case newRegisterModel.successfulUser of
+                Just user ->
+                    ( { model
+                        | registerModel = { newRegisterModel | successfulUser = Nothing }
+                        , user = Just user
+                        , route = Projects
+                      }
+                    , Cmd.batch
+                        [ Cmd.map RegisterMsg cmd
+                        , Nav.pushUrl model.key "/projects"
+                        ]
+                    )
+
+                Nothing ->
+                    ( { model | registerModel = newRegisterModel }, Cmd.map RegisterMsg cmd )
 
         ProjectsMsg subMsg ->
             case model.projectsModel of
@@ -391,6 +422,9 @@ viewContent model =
         Login ->
             Html.map LoginMsg (Login.view model.loginModel)
 
+        Register ->
+            Html.map RegisterMsg (Register.view model.registerModel)
+
         Projects ->
             case model.projectsModel of
                 Just projectsModel ->
@@ -440,6 +474,7 @@ routeParser : Parser (Route -> a) a
 routeParser =
     Parser.oneOf
         [ Parser.map Login Parser.top
+        , Parser.map Register (Parser.s "register")
         , Parser.map Projects (Parser.s "projects")
         , Parser.map TestProcedures (Parser.s "projects" </> Parser.string </> Parser.s "procedures")
         , Parser.map TestRuns (Parser.s "procedures" </> Parser.string </> Parser.s "runs")

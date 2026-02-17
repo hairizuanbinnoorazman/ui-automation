@@ -91,6 +91,59 @@ The server will be available at `http://localhost:8080`.
 make test
 ```
 
+## Docker Compose Development Workflow
+
+The Docker Compose setup mounts your locally-built Elm application for live development.
+
+### Quick Start
+
+1. **Build Elm locally** (required for first run):
+   ```bash
+   cd frontend
+   elm make src/App.elm --output=elm.js
+   cd ..
+   ```
+
+2. **Start the full stack**:
+   ```bash
+   docker compose up
+   # Or use: make docker-dev (automatically builds elm.js if missing)
+   ```
+
+3. **Make changes** to Elm source files
+
+4. **Rebuild elm.js locally**:
+   ```bash
+   cd frontend
+   elm make src/App.elm --output=elm.js
+   ```
+
+5. **Refresh browser** - changes are immediately visible (no container rebuild needed)
+
+### Fast Rebuild Workflow
+
+```bash
+make docker-rebuild-elm  # Builds elm.js and restarts frontend container
+```
+
+### How It Works
+
+- `docker-compose.yml` mounts `frontend/elm.js` and `frontend/index.html` as volumes
+- Changes to these files are immediately reflected in the running container
+- No container rebuild required during active development
+
+### Standalone Container Build
+
+For production deployments or standalone testing without Docker Compose:
+
+```bash
+cd frontend
+docker build -t ui-automation-frontend .
+docker run -p 8080:80 ui-automation-frontend
+```
+
+The frontend Dockerfile still builds Elm from source for self-contained deployments.
+
 ### API Endpoints
 
 All authenticated endpoints require a session cookie obtained from login.
