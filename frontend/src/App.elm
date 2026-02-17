@@ -440,10 +440,10 @@ view model =
                     }
                 }
             """ ]
+        , viewTopAppBar model
         , Html.div
             [ Html.Attributes.class "mdc-drawer-app-content" ]
-            [ viewTopAppBar model
-            , Html.div
+            [ Html.div
                 [ Html.Attributes.style "display" "flex" ]
                 [ if model.user /= Nothing then
                     viewDrawer model
