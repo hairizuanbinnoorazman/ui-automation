@@ -41,6 +41,14 @@ logout toMsg =
         }
 
 
+getMe : (Result Http.Error User -> msg) -> Cmd msg
+getMe toMsg =
+    Http.get
+        { url = baseUrl ++ "/auth/me"
+        , expect = Http.expectJson toMsg userDecoder
+        }
+
+
 
 -- Projects
 
