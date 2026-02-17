@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuan-noorazman/ui-automation/project"
 	"github.com/hairizuan-noorazman/ui-automation/scriptgen"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
@@ -19,6 +22,7 @@ import (
 type ScriptGenHandler struct {
 	scriptStore    scriptgen.Store
 	procedureStore testprocedure.Store
+	projectStore   project.Store
 	generator      scriptgen.ScriptGenerator
 	storage        storage.BlobStorage
 	logger         logger.Logger
@@ -28,6 +32,7 @@ type ScriptGenHandler struct {
 func NewScriptGenHandler(
 	scriptStore scriptgen.Store,
 	procedureStore testprocedure.Store,
+	projectStore project.Store,
 	generator scriptgen.ScriptGenerator,
 	storage storage.BlobStorage,
 	log logger.Logger,
@@ -35,10 +40,64 @@ func NewScriptGenHandler(
 	return &ScriptGenHandler{
 		scriptStore:    scriptStore,
 		procedureStore: procedureStore,
+		projectStore:   projectStore,
 		generator:      generator,
 		storage:        storage,
 		logger:         log,
 	}
+}
+
+// verifyProcedureOwnership checks if the authenticated user owns the project
+// containing the specified test procedure. Returns the procedure if authorized.
+func (h *ScriptGenHandler) verifyProcedureOwnership(
+	w http.ResponseWriter,
+	ctx context.Context,
+	procedureID uuid.UUID,
+	userID uuid.UUID,
+) (*testprocedure.TestProcedure, bool) {
+	// Fetch the test procedure
+	procedure, err := h.procedureStore.GetByID(ctx, procedureID)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return nil, false
+		}
+		h.logger.Error(ctx, "failed to fetch test procedure for authorization", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": procedureID.String(),
+		})
+		respondError(w, http.StatusInternalServerError, "authorization check failed")
+		return nil, false
+	}
+
+	// Fetch the project to verify ownership
+	proj, err := h.projectStore.GetByID(ctx, procedure.ProjectID)
+	if err != nil {
+		if err == project.ErrProjectNotFound {
+			respondError(w, http.StatusNotFound, "project not found")
+			return nil, false
+		}
+		h.logger.Error(ctx, "failed to fetch project for authorization", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": procedure.ProjectID.String(),
+		})
+		respondError(w, http.StatusInternalServerError, "authorization check failed")
+		return nil, false
+	}
+
+	// Verify ownership
+	if proj.OwnerID != userID {
+		h.logger.Warn(ctx, "unauthorized procedure access attempt", map[string]interface{}{
+			"user_id":           userID.String(),
+			"test_procedure_id": procedureID.String(),
+			"project_id":        procedure.ProjectID.String(),
+			"owner_id":          proj.OwnerID.String(),
+		})
+		respondError(w, http.StatusForbidden, "you don't have access to this test procedure")
+		return nil, false
+	}
+
+	return procedure, true
 }
 
 // GenerateScriptRequest represents a script generation request.
@@ -106,18 +165,10 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch test procedure
-	procedure, err := h.procedureStore.GetByID(ctx, procedureID)
-	if err != nil {
-		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
-			respondError(w, http.StatusNotFound, "test procedure not found")
-			return
-		}
-		h.logger.Error(ctx, "failed to fetch test procedure", map[string]interface{}{
-			"error":             err.Error(),
-			"test_procedure_id": procedureID.String(),
-		})
-		respondError(w, http.StatusInternalServerError, "failed to fetch test procedure")
+	// Verify user owns the procedure's project
+	procedure, ok := h.verifyProcedureOwnership(w, ctx, procedureID, userID)
+	if !ok {
+		// Helper already logged and responded with appropriate error
 		return
 	}
 
@@ -199,9 +250,24 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 
 // List handles listing all scripts for a test procedure.
 func (h *ScriptGenHandler) List(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := GetUserID(ctx)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
 	// Extract test procedure ID from URL
 	procedureID, ok := parseUUIDOrRespond(w, r, "procedure_id", "test procedure")
 	if !ok {
+		return
+	}
+
+	// Verify user owns the procedure's project
+	if _, ok := h.verifyProcedureOwnership(w, ctx, procedureID, userID); !ok {
+		// Helper already logged and responded with appropriate error
 		return
 	}
 
@@ -224,6 +290,15 @@ func (h *ScriptGenHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GetByID handles retrieving a script by its ID.
 func (h *ScriptGenHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := GetUserID(ctx)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
 	// Extract script ID from URL
 	scriptID, ok := parseUUIDOrRespond(w, r, "script_id", "script")
 	if !ok {
@@ -231,17 +306,23 @@ func (h *ScriptGenHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get script
-	script, err := h.scriptStore.GetByID(r.Context(), scriptID)
+	script, err := h.scriptStore.GetByID(ctx, scriptID)
 	if err != nil {
 		if errors.Is(err, scriptgen.ErrScriptNotFound) {
 			respondError(w, http.StatusNotFound, "script not found")
 			return
 		}
-		h.logger.Error(r.Context(), "failed to get script", map[string]interface{}{
+		h.logger.Error(ctx, "failed to get script", map[string]interface{}{
 			"error":     err.Error(),
 			"script_id": scriptID.String(),
 		})
 		respondError(w, http.StatusInternalServerError, "failed to get script")
+		return
+	}
+
+	// Verify user owns the procedure's project
+	if _, ok := h.verifyProcedureOwnership(w, ctx, script.TestProcedureID, userID); !ok {
+		// Helper already logged and responded with appropriate error
 		return
 	}
 
@@ -251,6 +332,13 @@ func (h *ScriptGenHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Download handles downloading a script file.
 func (h *ScriptGenHandler) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	// Get user ID from context
+	userID, ok := GetUserID(ctx)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
 
 	// Extract script ID from URL
 	scriptID, ok := parseUUIDOrRespond(w, r, "script_id", "script")
@@ -270,6 +358,12 @@ func (h *ScriptGenHandler) Download(w http.ResponseWriter, r *http.Request) {
 			"script_id": scriptID.String(),
 		})
 		respondError(w, http.StatusInternalServerError, "failed to get script")
+		return
+	}
+
+	// Verify user owns the procedure's project
+	if _, ok := h.verifyProcedureOwnership(w, ctx, script.TestProcedureID, userID); !ok {
+		// Helper already logged and responded with appropriate error
 		return
 	}
 
@@ -309,6 +403,13 @@ func (h *ScriptGenHandler) Download(w http.ResponseWriter, r *http.Request) {
 func (h *ScriptGenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Get user ID from context
+	userID, ok := GetUserID(ctx)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
 	// Extract script ID from URL
 	scriptID, ok := parseUUIDOrRespond(w, r, "script_id", "script")
 	if !ok {
@@ -327,6 +428,12 @@ func (h *ScriptGenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			"script_id": scriptID.String(),
 		})
 		respondError(w, http.StatusInternalServerError, "failed to get script")
+		return
+	}
+
+	// Verify user owns the procedure's project
+	if _, ok := h.verifyProcedureOwnership(w, ctx, script.TestProcedureID, userID); !ok {
+		// Helper already logged and responded with appropriate error
 		return
 	}
 
