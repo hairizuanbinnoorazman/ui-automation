@@ -14,6 +14,7 @@ import (
 	"github.com/hairizuan-noorazman/ui-automation/database"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/project"
+	"github.com/hairizuan-noorazman/ui-automation/scriptgen"
 	"github.com/hairizuan-noorazman/ui-automation/session"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
@@ -109,6 +110,29 @@ func runServer(cmd *cobra.Command, args []string) error {
 	testProcedureStore := testprocedure.NewMySQLStore(db, log)
 	testRunStore := testrun.NewMySQLStore(db, log)
 	assetStore := testrun.NewMySQLAssetStore(db, log)
+	scriptStore := scriptgen.NewMySQLStore(db, log)
+
+	// Initialize script generator based on config provider
+	var scriptGenerator scriptgen.ScriptGenerator
+	switch cfg.ScriptGen.Provider {
+	case "bedrock":
+		scriptGenerator, err = scriptgen.NewBedrockGenerator(
+			cfg.ScriptGen.Region,
+			cfg.ScriptGen.ModelID,
+			cfg.ScriptGen.MaxTokens,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize Bedrock generator: %w", err)
+		}
+		log.Info(ctx, "script generator initialized", map[string]interface{}{
+			"provider":   "bedrock",
+			"region":     cfg.ScriptGen.Region,
+			"model":      cfg.ScriptGen.ModelID,
+			"max_tokens": cfg.ScriptGen.MaxTokens,
+		})
+	default:
+		return fmt.Errorf("unsupported script generator provider: %s", cfg.ScriptGen.Provider)
+	}
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -202,6 +226,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/runs/{run_id}/assets", testRunHandler.ListAssets).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DownloadAsset).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DeleteAsset).Methods("DELETE")
+
+	// Script Generation routes (protected)
+	scriptGenHandler := handlers.NewScriptGenHandler(
+		scriptStore,
+		testProcedureStore,
+		scriptGenerator,
+		blobStorage,
+		log,
+	)
+
+	// Generate and list scripts for a procedure
+	apiRouter.HandleFunc("/procedures/{procedure_id}/scripts", scriptGenHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/procedures/{procedure_id}/scripts", scriptGenHandler.Generate).Methods("POST")
+
+	// Individual script operations
+	apiRouter.HandleFunc("/scripts/{script_id}", scriptGenHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/scripts/{script_id}/download", scriptGenHandler.Download).Methods("GET")
+	apiRouter.HandleFunc("/scripts/{script_id}", scriptGenHandler.Delete).Methods("DELETE")
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
