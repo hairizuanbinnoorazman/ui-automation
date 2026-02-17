@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"gorm.io/gorm"
 )
@@ -44,16 +45,16 @@ func (s *MySQLStore) Create(ctx context.Context, testProcedure *TestProcedure) e
 	}
 
 	s.logger.Info(ctx, "test procedure created", map[string]interface{}{
-		"test_procedure_id": testProcedure.ID,
+		"test_procedure_id": testProcedure.ID.String(),
 		"name":              testProcedure.Name,
-		"project_id":        testProcedure.ProjectID,
+		"project_id":        testProcedure.ProjectID.String(),
 	})
 
 	return nil
 }
 
 // GetByID retrieves a test procedure by its ID.
-func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*TestProcedure, error) {
+func (s *MySQLStore) GetByID(ctx context.Context, id uuid.UUID) (*TestProcedure, error) {
 	var testProcedure TestProcedure
 	err := s.db.WithContext(ctx).
 		Where("id = ?", id).
@@ -65,7 +66,7 @@ func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*TestProcedure, erro
 		}
 		s.logger.Error(ctx, "failed to get test procedure by ID", map[string]interface{}{
 			"error":             err.Error(),
-			"test_procedure_id": id,
+			"test_procedure_id": id.String(),
 		})
 		return nil, err
 	}
@@ -74,7 +75,7 @@ func (s *MySQLStore) GetByID(ctx context.Context, id uint) (*TestProcedure, erro
 }
 
 // Update updates a test procedure with the given setters (in-place, doesn't create version).
-func (s *MySQLStore) Update(ctx context.Context, id uint, setters ...UpdateSetter) error {
+func (s *MySQLStore) Update(ctx context.Context, id uuid.UUID, setters ...UpdateSetter) error {
 	// First, fetch the test procedure
 	testProcedure, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -92,20 +93,20 @@ func (s *MySQLStore) Update(ctx context.Context, id uint, setters ...UpdateSette
 	if err := s.db.WithContext(ctx).Save(testProcedure).Error; err != nil {
 		s.logger.Error(ctx, "failed to update test procedure", map[string]interface{}{
 			"error":             err.Error(),
-			"test_procedure_id": id,
+			"test_procedure_id": id.String(),
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "test procedure updated", map[string]interface{}{
-		"test_procedure_id": id,
+		"test_procedure_id": id.String(),
 	})
 
 	return nil
 }
 
 // Delete deletes a test procedure (hard delete due to CASCADE).
-func (s *MySQLStore) Delete(ctx context.Context, id uint) error {
+func (s *MySQLStore) Delete(ctx context.Context, id uuid.UUID) error {
 	result := s.db.WithContext(ctx).
 		Where("id = ?", id).
 		Delete(&TestProcedure{})
@@ -113,7 +114,7 @@ func (s *MySQLStore) Delete(ctx context.Context, id uint) error {
 	if result.Error != nil {
 		s.logger.Error(ctx, "failed to delete test procedure", map[string]interface{}{
 			"error":             result.Error.Error(),
-			"test_procedure_id": id,
+			"test_procedure_id": id.String(),
 		})
 		return result.Error
 	}
@@ -123,14 +124,14 @@ func (s *MySQLStore) Delete(ctx context.Context, id uint) error {
 	}
 
 	s.logger.Info(ctx, "test procedure deleted", map[string]interface{}{
-		"test_procedure_id": id,
+		"test_procedure_id": id.String(),
 	})
 
 	return nil
 }
 
 // ListByProject retrieves a paginated list of latest test procedures for a specific project.
-func (s *MySQLStore) ListByProject(ctx context.Context, projectID uint, limit, offset int) ([]*TestProcedure, error) {
+func (s *MySQLStore) ListByProject(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]*TestProcedure, error) {
 	var testProcedures []*TestProcedure
 	err := s.db.WithContext(ctx).
 		Where("project_id = ? AND is_latest = ?", projectID, true).
@@ -142,7 +143,7 @@ func (s *MySQLStore) ListByProject(ctx context.Context, projectID uint, limit, o
 	if err != nil {
 		s.logger.Error(ctx, "failed to list test procedures by project", map[string]interface{}{
 			"error":      err.Error(),
-			"project_id": projectID,
+			"project_id": projectID.String(),
 			"limit":      limit,
 			"offset":     offset,
 		})
@@ -154,7 +155,7 @@ func (s *MySQLStore) ListByProject(ctx context.Context, projectID uint, limit, o
 
 // CreateVersion creates a new version of an existing test procedure.
 // This creates an immutable copy with incremented version number.
-func (s *MySQLStore) CreateVersion(ctx context.Context, originalID uint) (*TestProcedure, error) {
+func (s *MySQLStore) CreateVersion(ctx context.Context, originalID uuid.UUID) (*TestProcedure, error) {
 	var newVersion *TestProcedure
 
 	// Execute in transaction
@@ -212,22 +213,22 @@ func (s *MySQLStore) CreateVersion(ctx context.Context, originalID uint) (*TestP
 	if err != nil {
 		s.logger.Error(ctx, "failed to create test procedure version", map[string]interface{}{
 			"error":       err.Error(),
-			"original_id": originalID,
+			"original_id": originalID.String(),
 		})
 		return nil, err
 	}
 
 	s.logger.Info(ctx, "test procedure version created", map[string]interface{}{
-		"new_version_id": newVersion.ID,
+		"new_version_id": newVersion.ID.String(),
 		"version":        newVersion.Version,
-		"original_id":    originalID,
+		"original_id":    originalID.String(),
 	})
 
 	return newVersion, nil
 }
 
 // GetVersionHistory retrieves all versions of a test procedure.
-func (s *MySQLStore) GetVersionHistory(ctx context.Context, testProcedureID uint) ([]*TestProcedure, error) {
+func (s *MySQLStore) GetVersionHistory(ctx context.Context, testProcedureID uuid.UUID) ([]*TestProcedure, error) {
 	// First get the test procedure to determine root ID
 	testProcedure, err := s.GetByID(ctx, testProcedureID)
 	if err != nil {
@@ -250,7 +251,7 @@ func (s *MySQLStore) GetVersionHistory(ctx context.Context, testProcedureID uint
 	if err != nil {
 		s.logger.Error(ctx, "failed to get version history", map[string]interface{}{
 			"error":             err.Error(),
-			"test_procedure_id": testProcedureID,
+			"test_procedure_id": testProcedureID.String(),
 		})
 		return nil, err
 	}
@@ -259,7 +260,7 @@ func (s *MySQLStore) GetVersionHistory(ctx context.Context, testProcedureID uint
 }
 
 // getByIDWithTx is a helper to get by ID within a transaction.
-func (s *MySQLStore) getByIDWithTx(ctx context.Context, tx *gorm.DB, id uint) (*TestProcedure, error) {
+func (s *MySQLStore) getByIDWithTx(ctx context.Context, tx *gorm.DB, id uuid.UUID) (*TestProcedure, error) {
 	var testProcedure TestProcedure
 	err := tx.WithContext(ctx).
 		Where("id = ?", id).

@@ -2,6 +2,8 @@ package testrun
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 // Store defines the interface for test run persistence operations.
@@ -10,19 +12,19 @@ type Store interface {
 	Create(ctx context.Context, testRun *TestRun) error
 
 	// GetByID retrieves a test run by its ID.
-	GetByID(ctx context.Context, id uint) (*TestRun, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*TestRun, error)
 
 	// Update updates a test run with the given setters.
-	Update(ctx context.Context, id uint, setters ...UpdateSetter) error
+	Update(ctx context.Context, id uuid.UUID, setters ...UpdateSetter) error
 
 	// ListByTestProcedure retrieves a paginated list of test runs for a specific test procedure.
-	ListByTestProcedure(ctx context.Context, testProcedureID uint, limit, offset int) ([]*TestRun, error)
+	ListByTestProcedure(ctx context.Context, testProcedureID uuid.UUID, limit, offset int) ([]*TestRun, error)
 
 	// Start marks a test run as started (sets started_at, changes status to running).
-	Start(ctx context.Context, id uint) error
+	Start(ctx context.Context, id uuid.UUID) error
 
 	// Complete marks a test run as completed (sets completed_at, final status, optional notes).
-	Complete(ctx context.Context, id uint, status Status, notes string) error
+	Complete(ctx context.Context, id uuid.UUID, status Status, notes string) error
 }
 
 // UpdateSetter is a function that updates a test run field.

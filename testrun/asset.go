@@ -3,6 +3,9 @@ package testrun
 import (
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var (
@@ -44,8 +47,8 @@ func (at AssetType) IsValid() bool {
 
 // TestRunAsset represents an asset associated with a test run.
 type TestRunAsset struct {
-	ID          uint      `json:"id" gorm:"primaryKey"`
-	TestRunID   uint      `json:"test_run_id" gorm:"not null;index:idx_test_run_id"`
+	ID          uuid.UUID `json:"id" gorm:"type:char(36);primaryKey"`
+	TestRunID   uuid.UUID `json:"test_run_id" gorm:"type:char(36);not null;index:idx_test_run_id"`
 	AssetType   AssetType `json:"asset_type" gorm:"type:varchar(20);not null;index:idx_asset_type"`
 	AssetPath   string    `json:"asset_path" gorm:"type:varchar(512);not null"`
 	FileName    string    `json:"file_name" gorm:"type:varchar(255);not null"`
@@ -55,9 +58,17 @@ type TestRunAsset struct {
 	UploadedAt  time.Time `json:"uploaded_at"`
 }
 
+// BeforeCreate hook to generate UUID before creating a new test run asset
+func (a *TestRunAsset) BeforeCreate(tx *gorm.DB) error {
+	if a.ID == uuid.Nil {
+		a.ID = uuid.New()
+	}
+	return nil
+}
+
 // Validate checks if the asset has valid required fields.
 func (a *TestRunAsset) Validate() error {
-	if a.TestRunID == 0 {
+	if a.TestRunID == uuid.Nil {
 		return ErrInvalidTestRunID
 	}
 	if !a.AssetType.IsValid() {

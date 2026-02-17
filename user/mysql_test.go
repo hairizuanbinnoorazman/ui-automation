@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -55,7 +56,7 @@ func TestMySQLStore_GetByID(t *testing.T) {
 	})
 
 	t.Run("non-existent user returns error", func(t *testing.T) {
-		_, err := store.GetByID(ctx, 99999)
+		_, err := store.GetByID(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrUserNotFound)
 	})
 
@@ -144,7 +145,7 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("non-existent user returns error", func(t *testing.T) {
-		err := store.Update(ctx, 99999, SetUsername("test"))
+		err := store.Update(ctx, uuid.New(), SetUsername("test"))
 		assert.ErrorIs(t, err, ErrUserNotFound)
 	})
 }
@@ -165,7 +166,7 @@ func TestMySQLStore_Delete(t *testing.T) {
 	})
 
 	t.Run("non-existent user returns error", func(t *testing.T) {
-		err := store.Delete(ctx, 99999)
+		err := store.Delete(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrUserNotFound)
 	})
 

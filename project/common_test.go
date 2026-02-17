@@ -3,6 +3,7 @@ package project
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/testutil"
 	"gorm.io/gorm"
@@ -20,7 +21,7 @@ func setupTestStore(t *testing.T) (*gorm.DB, Store) {
 }
 
 // createTestProject creates a test project with default values.
-func createTestProject(name, description string, ownerID uint) *Project {
+func createTestProject(name, description string, ownerID uuid.UUID) *Project {
 	return &Project{
 		Name:        name,
 		Description: description,

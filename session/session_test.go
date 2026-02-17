@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,9 +47,11 @@ func TestSession_IsExpired(t *testing.T) {
 func TestStore_SetAndGet(t *testing.T) {
 	store := NewStore()
 
+	sessionID := uuid.New()
+	userID := uuid.New()
 	session := &Session{
-		ID:        "test-session-id",
-		UserID:    1,
+		ID:        sessionID,
+		UserID:    userID,
 		Email:     "test@example.com",
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -56,7 +59,7 @@ func TestStore_SetAndGet(t *testing.T) {
 
 	store.Set(session)
 
-	retrieved, err := store.Get("test-session-id")
+	retrieved, err := store.Get(sessionID)
 	require.NoError(t, err)
 	assert.Equal(t, session.ID, retrieved.ID)
 	assert.Equal(t, session.UserID, retrieved.UserID)
@@ -66,16 +69,18 @@ func TestStore_SetAndGet(t *testing.T) {
 func TestStore_GetNonExistent(t *testing.T) {
 	store := NewStore()
 
-	_, err := store.Get("non-existent-id")
+	_, err := store.Get(uuid.New())
 	assert.ErrorIs(t, err, ErrSessionNotFound)
 }
 
 func TestStore_GetExpired(t *testing.T) {
 	store := NewStore()
 
+	sessionID := uuid.New()
+	userID := uuid.New()
 	session := &Session{
-		ID:        "expired-session",
-		UserID:    1,
+		ID:        sessionID,
+		UserID:    userID,
 		Email:     "test@example.com",
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour),
@@ -83,25 +88,27 @@ func TestStore_GetExpired(t *testing.T) {
 
 	store.Set(session)
 
-	_, err := store.Get("expired-session")
+	_, err := store.Get(sessionID)
 	assert.ErrorIs(t, err, ErrSessionExpired)
 }
 
 func TestStore_Delete(t *testing.T) {
 	store := NewStore()
 
+	sessionID := uuid.New()
+	userID := uuid.New()
 	session := &Session{
-		ID:        "delete-session",
-		UserID:    1,
+		ID:        sessionID,
+		UserID:    userID,
 		Email:     "test@example.com",
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
 	}
 
 	store.Set(session)
-	store.Delete("delete-session")
+	store.Delete(sessionID)
 
-	_, err := store.Get("delete-session")
+	_, err := store.Get(sessionID)
 	assert.ErrorIs(t, err, ErrSessionNotFound)
 }
 
@@ -109,9 +116,11 @@ func TestStore_Cleanup(t *testing.T) {
 	store := NewStore()
 
 	// Add active session
+	activeSessionID := uuid.New()
+	activeUserID := uuid.New()
 	activeSession := &Session{
-		ID:        "active-session",
-		UserID:    1,
+		ID:        activeSessionID,
+		UserID:    activeUserID,
 		Email:     "active@example.com",
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(time.Hour),
@@ -119,9 +128,11 @@ func TestStore_Cleanup(t *testing.T) {
 	store.Set(activeSession)
 
 	// Add expired session
+	expiredSessionID := uuid.New()
+	expiredUserID := uuid.New()
 	expiredSession := &Session{
-		ID:        "expired-session",
-		UserID:    2,
+		ID:        expiredSessionID,
+		UserID:    expiredUserID,
 		Email:     "expired@example.com",
 		CreatedAt: time.Now().Add(-2 * time.Hour),
 		ExpiresAt: time.Now().Add(-time.Hour),
@@ -133,11 +144,11 @@ func TestStore_Cleanup(t *testing.T) {
 	assert.Equal(t, 1, removed)
 
 	// Active session should still exist
-	_, err := store.Get("active-session")
+	_, err := store.Get(activeSessionID)
 	assert.NoError(t, err)
 
 	// Expired session should be removed
-	_, err = store.Get("expired-session")
+	_, err = store.Get(expiredSessionID)
 	assert.ErrorIs(t, err, ErrSessionNotFound)
 }
 
@@ -145,10 +156,11 @@ func TestManager_Create(t *testing.T) {
 	log := logger.NewTestLogger()
 	manager := NewManager(24*time.Hour, log)
 
-	session, err := manager.Create(1, "test@example.com")
+	userID := uuid.New()
+	session, err := manager.Create(userID, "test@example.com")
 	require.NoError(t, err)
-	assert.NotEmpty(t, session.ID)
-	assert.Equal(t, uint(1), session.UserID)
+	assert.NotEqual(t, uuid.Nil, session.ID)
+	assert.Equal(t, userID, session.UserID)
 	assert.Equal(t, "test@example.com", session.Email)
 	assert.False(t, session.IsExpired())
 }
@@ -157,7 +169,8 @@ func TestManager_Get(t *testing.T) {
 	log := logger.NewTestLogger()
 	manager := NewManager(24*time.Hour, log)
 
-	created, err := manager.Create(1, "test@example.com")
+	userID := uuid.New()
+	created, err := manager.Create(userID, "test@example.com")
 	require.NoError(t, err)
 
 	retrieved, err := manager.Get(created.ID)
@@ -170,7 +183,8 @@ func TestManager_GetExpired(t *testing.T) {
 	log := logger.NewTestLogger()
 	manager := NewManager(time.Millisecond, log)
 
-	created, err := manager.Create(1, "test@example.com")
+	userID := uuid.New()
+	created, err := manager.Create(userID, "test@example.com")
 	require.NoError(t, err)
 
 	// Wait for session to expire
@@ -184,7 +198,8 @@ func TestManager_Delete(t *testing.T) {
 	log := logger.NewTestLogger()
 	manager := NewManager(24*time.Hour, log)
 
-	created, err := manager.Create(1, "test@example.com")
+	userID := uuid.New()
+	created, err := manager.Create(userID, "test@example.com")
 	require.NoError(t, err)
 
 	manager.Delete(created.ID)
@@ -198,13 +213,15 @@ func TestManager_Cleanup(t *testing.T) {
 	manager := NewManager(50*time.Millisecond, log)
 
 	// Create session that will expire soon
-	_, err := manager.Create(1, "test@example.com")
+	userID1 := uuid.New()
+	_, err := manager.Create(userID1, "test@example.com")
 	require.NoError(t, err)
 
 	// Create another active session with longer duration
 	manager2 := NewManager(24*time.Hour, log)
 	manager2.store = manager.store // Share store
-	activeSession, err := manager2.Create(2, "active@example.com")
+	userID2 := uuid.New()
+	activeSession, err := manager2.Create(userID2, "active@example.com")
 	require.NoError(t, err)
 
 	// Wait for first session to expire
@@ -224,14 +241,15 @@ func TestManager_Concurrent(t *testing.T) {
 	manager := NewManager(24*time.Hour, log)
 
 	var wg sync.WaitGroup
-	sessionIDs := make(chan string, 100)
+	sessionIDs := make(chan uuid.UUID, 100)
 
 	// Create 100 sessions concurrently
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			session, err := manager.Create(uint(id), "test@example.com")
+			userID := uuid.New()
+			session, err := manager.Create(userID, "test@example.com")
 			if err == nil {
 				sessionIDs <- session.ID
 			}
@@ -253,13 +271,11 @@ func TestManager_Concurrent(t *testing.T) {
 }
 
 func TestGenerateSessionID(t *testing.T) {
-	id1, err := generateSessionID()
-	require.NoError(t, err)
-	assert.NotEmpty(t, id1)
+	id1 := uuid.New()
+	assert.NotEqual(t, uuid.Nil, id1)
 
-	id2, err := generateSessionID()
-	require.NoError(t, err)
-	assert.NotEmpty(t, id2)
+	id2 := uuid.New()
+	assert.NotEqual(t, uuid.Nil, id2)
 
 	// IDs should be unique
 	assert.NotEqual(t, id1, id2)

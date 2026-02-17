@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"gorm.io/gorm"
 )
@@ -31,15 +32,15 @@ func (s *MySQLAssetStore) Create(ctx context.Context, asset *TestRunAsset) error
 	if err := s.db.WithContext(ctx).Create(asset).Error; err != nil {
 		s.logger.Error(ctx, "failed to create asset", map[string]interface{}{
 			"error":       err.Error(),
-			"test_run_id": asset.TestRunID,
+			"test_run_id": asset.TestRunID.String(),
 			"file_name":   asset.FileName,
 		})
 		return err
 	}
 
 	s.logger.Info(ctx, "asset created", map[string]interface{}{
-		"asset_id":    asset.ID,
-		"test_run_id": asset.TestRunID,
+		"asset_id":    asset.ID.String(),
+		"test_run_id": asset.TestRunID.String(),
 		"file_name":   asset.FileName,
 	})
 
@@ -47,7 +48,7 @@ func (s *MySQLAssetStore) Create(ctx context.Context, asset *TestRunAsset) error
 }
 
 // GetByID retrieves an asset by its ID.
-func (s *MySQLAssetStore) GetByID(ctx context.Context, id uint) (*TestRunAsset, error) {
+func (s *MySQLAssetStore) GetByID(ctx context.Context, id uuid.UUID) (*TestRunAsset, error) {
 	var asset TestRunAsset
 	err := s.db.WithContext(ctx).
 		Where("id = ?", id).
@@ -59,7 +60,7 @@ func (s *MySQLAssetStore) GetByID(ctx context.Context, id uint) (*TestRunAsset, 
 		}
 		s.logger.Error(ctx, "failed to get asset by ID", map[string]interface{}{
 			"error":    err.Error(),
-			"asset_id": id,
+			"asset_id": id.String(),
 		})
 		return nil, err
 	}
@@ -68,7 +69,7 @@ func (s *MySQLAssetStore) GetByID(ctx context.Context, id uint) (*TestRunAsset, 
 }
 
 // ListByTestRun retrieves all assets for a specific test run.
-func (s *MySQLAssetStore) ListByTestRun(ctx context.Context, testRunID uint) ([]*TestRunAsset, error) {
+func (s *MySQLAssetStore) ListByTestRun(ctx context.Context, testRunID uuid.UUID) ([]*TestRunAsset, error) {
 	var assets []*TestRunAsset
 	err := s.db.WithContext(ctx).
 		Where("test_run_id = ?", testRunID).
@@ -78,7 +79,7 @@ func (s *MySQLAssetStore) ListByTestRun(ctx context.Context, testRunID uint) ([]
 	if err != nil {
 		s.logger.Error(ctx, "failed to list assets by test run", map[string]interface{}{
 			"error":       err.Error(),
-			"test_run_id": testRunID,
+			"test_run_id": testRunID.String(),
 		})
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func (s *MySQLAssetStore) ListByTestRun(ctx context.Context, testRunID uint) ([]
 }
 
 // Delete deletes an asset by ID.
-func (s *MySQLAssetStore) Delete(ctx context.Context, id uint) error {
+func (s *MySQLAssetStore) Delete(ctx context.Context, id uuid.UUID) error {
 	result := s.db.WithContext(ctx).
 		Where("id = ?", id).
 		Delete(&TestRunAsset{})
@@ -95,7 +96,7 @@ func (s *MySQLAssetStore) Delete(ctx context.Context, id uint) error {
 	if result.Error != nil {
 		s.logger.Error(ctx, "failed to delete asset", map[string]interface{}{
 			"error":    result.Error.Error(),
-			"asset_id": id,
+			"asset_id": id.String(),
 		})
 		return result.Error
 	}
@@ -105,7 +106,7 @@ func (s *MySQLAssetStore) Delete(ctx context.Context, id uint) error {
 	}
 
 	s.logger.Info(ctx, "asset deleted", map[string]interface{}{
-		"asset_id": id,
+		"asset_id": id.String(),
 	})
 
 	return nil

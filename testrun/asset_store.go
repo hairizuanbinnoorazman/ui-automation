@@ -2,6 +2,8 @@ package testrun
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 // AssetStore defines the interface for test run asset persistence operations.
@@ -10,11 +12,11 @@ type AssetStore interface {
 	Create(ctx context.Context, asset *TestRunAsset) error
 
 	// GetByID retrieves an asset by its ID.
-	GetByID(ctx context.Context, id uint) (*TestRunAsset, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*TestRunAsset, error)
 
 	// ListByTestRun retrieves all assets for a specific test run.
-	ListByTestRun(ctx context.Context, testRunID uint) ([]*TestRunAsset, error)
+	ListByTestRun(ctx context.Context, testRunID uuid.UUID) ([]*TestRunAsset, error)
 
 	// Delete deletes an asset by ID.
-	Delete(ctx context.Context, id uint) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }

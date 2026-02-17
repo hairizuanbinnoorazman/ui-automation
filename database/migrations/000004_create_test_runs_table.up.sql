@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS test_runs (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    test_procedure_id BIGINT UNSIGNED NOT NULL,
-    executed_by BIGINT UNSIGNED NOT NULL,
+    id CHAR(36) PRIMARY KEY,
+    test_procedure_id CHAR(36) NOT NULL,
+    executed_by CHAR(36) NOT NULL,
     status ENUM('pending', 'running', 'passed', 'failed', 'skipped') NOT NULL DEFAULT 'pending',
     notes TEXT,
     started_at TIMESTAMP NULL,

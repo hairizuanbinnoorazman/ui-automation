@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,17 +14,21 @@ func TestMySQLStore_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully create test run", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "Initial notes")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "Initial notes")
 		err := store.Create(ctx, tr)
 		require.NoError(t, err)
-		assert.NotZero(t, tr.ID)
+		assert.NotEqual(t, uuid.Nil, tr.ID)
 		assert.Equal(t, StatusPending, tr.Status)
 	})
 
 	t.Run("create test run with default status", func(t *testing.T) {
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		tr := &TestRun{
-			TestProcedureID: 1,
-			ExecutedBy:      1,
+			TestProcedureID: testProcedureID,
+			ExecutedBy:      executedBy,
 		}
 		err := store.Create(ctx, tr)
 		require.NoError(t, err)
@@ -31,8 +36,9 @@ func TestMySQLStore_Create(t *testing.T) {
 	})
 
 	t.Run("invalid test run returns error", func(t *testing.T) {
+		executedBy := uuid.New()
 		tr := &TestRun{
-			ExecutedBy: 1,
+			ExecutedBy: executedBy,
 			Status:     StatusPending,
 		}
 		err := store.Create(ctx, tr)
@@ -45,7 +51,9 @@ func TestMySQLStore_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("retrieve existing test run", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "Test notes")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "Test notes")
 		require.NoError(t, store.Create(ctx, tr))
 
 		retrieved, err := store.GetByID(ctx, tr.ID)
@@ -56,7 +64,7 @@ func TestMySQLStore_GetByID(t *testing.T) {
 	})
 
 	t.Run("non-existent test run returns error", func(t *testing.T) {
-		_, err := store.GetByID(ctx, 99999)
+		_, err := store.GetByID(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrTestRunNotFound)
 	})
 }
@@ -66,7 +74,9 @@ func TestMySQLStore_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("update notes", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "Original notes")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "Original notes")
 		require.NoError(t, store.Create(ctx, tr))
 
 		err := store.Update(ctx, tr.ID, SetNotes("Updated notes"))
@@ -78,7 +88,9 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update status", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 		require.NoError(t, store.Create(ctx, tr))
 
 		err := store.Update(ctx, tr.ID, SetStatus(StatusRunning))
@@ -90,7 +102,7 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update non-existent returns error", func(t *testing.T) {
-		err := store.Update(ctx, 99999, SetNotes("New notes"))
+		err := store.Update(ctx, uuid.New(), SetNotes("New notes"))
 		assert.ErrorIs(t, err, ErrTestRunNotFound)
 	})
 }
@@ -100,10 +112,11 @@ func TestMySQLStore_ListByTestProcedure(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("list test runs for procedure", func(t *testing.T) {
-		testProcedureID := uint(10)
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		// Create 3 runs
 		for i := 0; i < 3; i++ {
-			tr := createTestRun(testProcedureID, 1, StatusPending, "")
+			tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 			require.NoError(t, store.Create(ctx, tr))
 		}
 
@@ -113,9 +126,10 @@ func TestMySQLStore_ListByTestProcedure(t *testing.T) {
 	})
 
 	t.Run("list with pagination", func(t *testing.T) {
-		testProcedureID := uint(20)
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
 		for i := 0; i < 5; i++ {
-			tr := createTestRun(testProcedureID, 1, StatusPending, "")
+			tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 			require.NoError(t, store.Create(ctx, tr))
 		}
 
@@ -136,7 +150,9 @@ func TestMySQLStore_Start(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully start test run", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 		require.NoError(t, store.Create(ctx, tr))
 
 		err := store.Start(ctx, tr.ID)
@@ -149,7 +165,9 @@ func TestMySQLStore_Start(t *testing.T) {
 	})
 
 	t.Run("cannot start already started run", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 		require.NoError(t, store.Create(ctx, tr))
 		require.NoError(t, store.Start(ctx, tr.ID))
 
@@ -158,7 +176,7 @@ func TestMySQLStore_Start(t *testing.T) {
 	})
 
 	t.Run("start non-existent returns error", func(t *testing.T) {
-		err := store.Start(ctx, 99999)
+		err := store.Start(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrTestRunNotFound)
 	})
 }
@@ -168,7 +186,9 @@ func TestMySQLStore_Complete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully complete with passed", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 		require.NoError(t, store.Create(ctx, tr))
 		require.NoError(t, store.Start(ctx, tr.ID))
 
@@ -183,7 +203,9 @@ func TestMySQLStore_Complete(t *testing.T) {
 	})
 
 	t.Run("successfully complete with failed", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 		require.NoError(t, store.Create(ctx, tr))
 		require.NoError(t, store.Start(ctx, tr.ID))
 
@@ -197,7 +219,9 @@ func TestMySQLStore_Complete(t *testing.T) {
 	})
 
 	t.Run("cannot complete non-running run", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusPending, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
 		require.NoError(t, store.Create(ctx, tr))
 
 		err := store.Complete(ctx, tr.ID, StatusPassed, "")
@@ -205,7 +229,7 @@ func TestMySQLStore_Complete(t *testing.T) {
 	})
 
 	t.Run("complete non-existent returns error", func(t *testing.T) {
-		err := store.Complete(ctx, 99999, StatusPassed, "")
+		err := store.Complete(ctx, uuid.New(), StatusPassed, "")
 		assert.ErrorIs(t, err, ErrTestRunNotFound)
 	})
 }
@@ -215,14 +239,16 @@ func TestMySQLAssetStore_Create(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test run first
-	tr := createTestRun(1, 1, StatusRunning, "")
+	testProcedureID := uuid.New()
+	executedBy := uuid.New()
+	tr := createTestRun(testProcedureID, executedBy, StatusRunning, "")
 	require.NoError(t, store.Create(ctx, tr))
 
 	t.Run("successfully create asset", func(t *testing.T) {
 		asset := createTestAsset(tr.ID, AssetTypeImage, "path/to/image.png", "image.png", 1024)
 		err := assetStore.Create(ctx, asset)
 		require.NoError(t, err)
-		assert.NotZero(t, asset.ID)
+		assert.NotEqual(t, uuid.Nil, asset.ID)
 	})
 
 	t.Run("create multiple assets for same run", func(t *testing.T) {
@@ -253,7 +279,9 @@ func TestMySQLAssetStore_GetByID(t *testing.T) {
 	_, store, assetStore := setupTestStore(t)
 	ctx := context.Background()
 
-	tr := createTestRun(1, 1, StatusRunning, "")
+	testProcedureID := uuid.New()
+	executedBy := uuid.New()
+	tr := createTestRun(testProcedureID, executedBy, StatusRunning, "")
 	require.NoError(t, store.Create(ctx, tr))
 
 	t.Run("retrieve existing asset", func(t *testing.T) {
@@ -268,7 +296,7 @@ func TestMySQLAssetStore_GetByID(t *testing.T) {
 	})
 
 	t.Run("non-existent asset returns error", func(t *testing.T) {
-		_, err := assetStore.GetByID(ctx, 99999)
+		_, err := assetStore.GetByID(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrAssetNotFound)
 	})
 }
@@ -278,7 +306,9 @@ func TestMySQLAssetStore_ListByTestRun(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("list assets for test run", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusRunning, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusRunning, "")
 		require.NoError(t, store.Create(ctx, tr))
 
 		// Create 3 assets
@@ -293,7 +323,9 @@ func TestMySQLAssetStore_ListByTestRun(t *testing.T) {
 	})
 
 	t.Run("list returns empty for run with no assets", func(t *testing.T) {
-		tr := createTestRun(1, 1, StatusRunning, "")
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusRunning, "")
 		require.NoError(t, store.Create(ctx, tr))
 
 		assets, err := assetStore.ListByTestRun(ctx, tr.ID)
@@ -306,7 +338,9 @@ func TestMySQLAssetStore_Delete(t *testing.T) {
 	_, store, assetStore := setupTestStore(t)
 	ctx := context.Background()
 
-	tr := createTestRun(1, 1, StatusRunning, "")
+	testProcedureID := uuid.New()
+	executedBy := uuid.New()
+	tr := createTestRun(testProcedureID, executedBy, StatusRunning, "")
 	require.NoError(t, store.Create(ctx, tr))
 
 	t.Run("delete existing asset", func(t *testing.T) {
@@ -321,7 +355,7 @@ func TestMySQLAssetStore_Delete(t *testing.T) {
 	})
 
 	t.Run("delete non-existent returns error", func(t *testing.T) {
-		err := assetStore.Delete(ctx, 99999)
+		err := assetStore.Delete(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrAssetNotFound)
 	})
 }

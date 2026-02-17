@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/user"
 )
@@ -76,16 +75,13 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 // GetByID handles getting a single user by ID.
 func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid user ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "user")
+	if !ok {
 		return
 	}
 
 	// Get user
-	foundUser, err := h.userStore.GetByID(r.Context(), uint(id))
+	foundUser, err := h.userStore.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
 			respondError(w, http.StatusNotFound, "user not found")
@@ -105,11 +101,8 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Update handles updating a user.
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid user ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "user")
+	if !ok {
 		return
 	}
 
@@ -141,7 +134,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update user
-	if err := h.userStore.Update(r.Context(), uint(id), setters...); err != nil {
+	if err := h.userStore.Update(r.Context(), id, setters...); err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
 			respondError(w, http.StatusNotFound, "user not found")
 			return
@@ -163,7 +156,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get updated user
-	updatedUser, err := h.userStore.GetByID(r.Context(), uint(id))
+	updatedUser, err := h.userStore.GetByID(r.Context(), id)
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to get updated user", map[string]interface{}{
 			"error":   err.Error(),
@@ -183,16 +176,13 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete handles soft deleting a user.
 func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from URL
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid user ID")
+	id, ok := parseUUIDOrRespond(w, r, "id", "user")
+	if !ok {
 		return
 	}
 
 	// Delete user
-	if err := h.userStore.Delete(r.Context(), uint(id)); err != nil {
+	if err := h.userStore.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, user.ErrUserNotFound) {
 			respondError(w, http.StatusNotFound, "user not found")
 			return

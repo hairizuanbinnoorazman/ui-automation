@@ -3,6 +3,7 @@ package testprocedure
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/testutil"
 	"gorm.io/gorm"
@@ -20,7 +21,7 @@ func setupTestStore(t *testing.T) (*gorm.DB, Store) {
 }
 
 // createTestProcedure creates a test procedure with default values.
-func createTestProcedure(name, description string, projectID, createdBy uint, steps Steps) *TestProcedure {
+func createTestProcedure(name, description string, projectID, createdBy uuid.UUID, steps Steps) *TestProcedure {
 	return &TestProcedure{
 		Name:        name,
 		Description: description,

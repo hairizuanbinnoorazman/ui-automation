@@ -3,6 +3,9 @@ package testrun
 import (
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 var (
@@ -53,9 +56,9 @@ func (s Status) IsFinal() bool {
 
 // TestRun represents a test run in the system.
 type TestRun struct {
-	ID              uint       `json:"id" gorm:"primaryKey"`
-	TestProcedureID uint       `json:"test_procedure_id" gorm:"not null;index:idx_test_procedure_id"`
-	ExecutedBy      uint       `json:"executed_by" gorm:"not null;index:idx_executed_by"`
+	ID              uuid.UUID  `json:"id" gorm:"type:char(36);primaryKey"`
+	TestProcedureID uuid.UUID  `json:"test_procedure_id" gorm:"type:char(36);not null;index:idx_test_procedure_id"`
+	ExecutedBy      uuid.UUID  `json:"executed_by" gorm:"type:char(36);not null;index:idx_executed_by"`
 	Status          Status     `json:"status" gorm:"type:varchar(20);not null;default:'pending';index:idx_status"`
 	Notes           string     `json:"notes" gorm:"type:text"`
 	StartedAt       *time.Time `json:"started_at,omitempty" gorm:"index:idx_started_at"`
@@ -64,12 +67,20 @@ type TestRun struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
+// BeforeCreate hook to generate UUID before creating a new test run
+func (tr *TestRun) BeforeCreate(tx *gorm.DB) error {
+	if tr.ID == uuid.Nil {
+		tr.ID = uuid.New()
+	}
+	return nil
+}
+
 // Validate checks if the test run has valid required fields.
 func (tr *TestRun) Validate() error {
-	if tr.TestProcedureID == 0 {
+	if tr.TestProcedureID == uuid.Nil {
 		return ErrInvalidTestProcedureID
 	}
-	if tr.ExecutedBy == 0 {
+	if tr.ExecutedBy == uuid.Nil {
 		return ErrInvalidExecutedBy
 	}
 	if !tr.Status.IsValid() {

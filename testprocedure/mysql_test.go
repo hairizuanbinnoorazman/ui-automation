@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,27 +17,33 @@ func TestMySQLStore_Create(t *testing.T) {
 		steps := Steps{
 			{"action": "click", "selector": "#button"},
 		}
-		tp := createTestProcedure("Test Procedure", "Description", 1, 1, steps)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test Procedure", "Description", projectID, createdBy, steps)
 		err := store.Create(ctx, tp)
 		require.NoError(t, err)
-		assert.NotZero(t, tp.ID)
+		assert.NotEqual(t, uuid.Nil, tp.ID)
 		assert.Equal(t, uint(1), tp.Version)
 		assert.True(t, tp.IsLatest)
 		assert.Nil(t, tp.ParentID)
 	})
 
 	t.Run("create test procedure without steps", func(t *testing.T) {
-		tp := createTestProcedure("Minimal Procedure", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Minimal Procedure", "Description", projectID, createdBy, nil)
 		err := store.Create(ctx, tp)
 		require.NoError(t, err)
-		assert.NotZero(t, tp.ID)
+		assert.NotEqual(t, uuid.Nil, tp.ID)
 	})
 
 	t.Run("invalid test procedure returns error", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
 		tp := &TestProcedure{
 			Description: "Missing name",
-			ProjectID:   1,
-			CreatedBy:   1,
+			ProjectID:   projectID,
+			CreatedBy:   createdBy,
 		}
 		err := store.Create(ctx, tp)
 		assert.ErrorIs(t, err, ErrInvalidTestProcedureName)
@@ -51,7 +58,9 @@ func TestMySQLStore_GetByID(t *testing.T) {
 		steps := Steps{
 			{"action": "navigate", "url": "https://example.com"},
 		}
-		tp := createTestProcedure("Get Test", "Description", 1, 1, steps)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Get Test", "Description", projectID, createdBy, steps)
 		require.NoError(t, store.Create(ctx, tp))
 
 		retrieved, err := store.GetByID(ctx, tp.ID)
@@ -63,7 +72,7 @@ func TestMySQLStore_GetByID(t *testing.T) {
 	})
 
 	t.Run("non-existent test procedure returns error", func(t *testing.T) {
-		_, err := store.GetByID(ctx, 99999)
+		_, err := store.GetByID(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrTestProcedureNotFound)
 	})
 }
@@ -73,7 +82,9 @@ func TestMySQLStore_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("update name", func(t *testing.T) {
-		tp := createTestProcedure("Original Name", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Original Name", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
 		err := store.Update(ctx, tp.ID, SetName("Updated Name"))
@@ -85,7 +96,9 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update steps", func(t *testing.T) {
-		tp := createTestProcedure("Test", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
 		newSteps := Steps{
@@ -101,7 +114,9 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update multiple fields", func(t *testing.T) {
-		tp := createTestProcedure("Original", "Original Desc", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Original", "Original Desc", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
 		err := store.Update(ctx, tp.ID,
@@ -117,7 +132,7 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 
 	t.Run("update non-existent returns error", func(t *testing.T) {
-		err := store.Update(ctx, 99999, SetName("New Name"))
+		err := store.Update(ctx, uuid.New(), SetName("New Name"))
 		assert.ErrorIs(t, err, ErrTestProcedureNotFound)
 	})
 }
@@ -127,7 +142,9 @@ func TestMySQLStore_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("delete existing test procedure", func(t *testing.T) {
-		tp := createTestProcedure("To Delete", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("To Delete", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
 		err := store.Delete(ctx, tp.ID)
@@ -138,7 +155,7 @@ func TestMySQLStore_Delete(t *testing.T) {
 	})
 
 	t.Run("delete non-existent returns error", func(t *testing.T) {
-		err := store.Delete(ctx, 99999)
+		err := store.Delete(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrTestProcedureNotFound)
 	})
 }
@@ -148,10 +165,11 @@ func TestMySQLStore_ListByProject(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("list procedures for project", func(t *testing.T) {
-		projectID := uint(10)
+		projectID := uuid.New()
+		createdBy := uuid.New()
 		// Create 3 procedures for project 10
 		for i := 0; i < 3; i++ {
-			tp := createTestProcedure("Procedure "+string(rune('A'+i)), "Description", projectID, 1, nil)
+			tp := createTestProcedure("Procedure "+string(rune('A'+i)), "Description", projectID, createdBy, nil)
 			require.NoError(t, store.Create(ctx, tp))
 		}
 
@@ -161,8 +179,9 @@ func TestMySQLStore_ListByProject(t *testing.T) {
 	})
 
 	t.Run("list returns only latest versions", func(t *testing.T) {
-		projectID := uint(20)
-		tp := createTestProcedure("Versioned Procedure", "Description", projectID, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Versioned Procedure", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
 		// Create a new version
@@ -185,9 +204,10 @@ func TestMySQLStore_ListByProject(t *testing.T) {
 	})
 
 	t.Run("list with pagination", func(t *testing.T) {
-		projectID := uint(30)
+		projectID := uuid.New()
+		createdBy := uuid.New()
 		for i := 0; i < 5; i++ {
-			tp := createTestProcedure("Paginated "+string(rune('A'+i)), "Description", projectID, 1, nil)
+			tp := createTestProcedure("Paginated "+string(rune('A'+i)), "Description", projectID, createdBy, nil)
 			require.NoError(t, store.Create(ctx, tp))
 		}
 
@@ -208,7 +228,9 @@ func TestMySQLStore_CreateVersion(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("create version from original", func(t *testing.T) {
-		original := createTestProcedure("Original Procedure", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Original Procedure", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
 		// Create version
@@ -228,7 +250,9 @@ func TestMySQLStore_CreateVersion(t *testing.T) {
 	})
 
 	t.Run("create version from version", func(t *testing.T) {
-		original := createTestProcedure("Test", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Test", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
 		version2, err := store.CreateVersion(ctx, original.ID)
@@ -254,7 +278,9 @@ func TestMySQLStore_CreateVersion(t *testing.T) {
 		steps := Steps{
 			{"action": "click", "selector": "#button"},
 		}
-		original := createTestProcedure("Original", "Original Description", 1, 1, steps)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Original", "Original Description", projectID, createdBy, steps)
 		require.NoError(t, store.Create(ctx, original))
 
 		version2, err := store.CreateVersion(ctx, original.ID)
@@ -267,7 +293,7 @@ func TestMySQLStore_CreateVersion(t *testing.T) {
 	})
 
 	t.Run("create version from non-existent returns error", func(t *testing.T) {
-		_, err := store.CreateVersion(ctx, 99999)
+		_, err := store.CreateVersion(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrTestProcedureNotFound)
 	})
 }
@@ -277,7 +303,9 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("get history of original", func(t *testing.T) {
-		original := createTestProcedure("Versioned", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Versioned", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
 		history, err := store.GetVersionHistory(ctx, original.ID)
@@ -288,7 +316,9 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	})
 
 	t.Run("get history with multiple versions", func(t *testing.T) {
-		original := createTestProcedure("Multi-Version", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Multi-Version", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
 		version2, err := store.CreateVersion(ctx, original.ID)
@@ -315,7 +345,9 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	})
 
 	t.Run("get history from middle version", func(t *testing.T) {
-		original := createTestProcedure("Test History", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Test History", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
 		version2, err := store.CreateVersion(ctx, original.ID)
@@ -342,7 +374,7 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	})
 
 	t.Run("get history from non-existent returns error", func(t *testing.T) {
-		_, err := store.GetVersionHistory(ctx, 99999)
+		_, err := store.GetVersionHistory(ctx, uuid.New())
 		assert.ErrorIs(t, err, ErrTestProcedureNotFound)
 	})
 }
@@ -353,7 +385,9 @@ func TestMySQLStore_VersioningComplexScenario(t *testing.T) {
 
 	t.Run("update vs version behavior", func(t *testing.T) {
 		// Create original
-		original := createTestProcedure("Original", "Description", 1, 1, nil)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		original := createTestProcedure("Original", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
 		// Update modifies in-place (no new version)

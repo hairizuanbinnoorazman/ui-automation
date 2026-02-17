@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 )
 
@@ -43,4 +46,23 @@ func parseJSON(r *http.Request, dest interface{}, log logger.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// parseUUID parses a UUID from the request path parameters.
+func parseUUID(r *http.Request, paramName string) (uuid.UUID, error) {
+	vars := mux.Vars(r)
+	uuidStr := vars[paramName]
+	return uuid.Parse(uuidStr)
+}
+
+// parseUUIDOrRespond parses a UUID from path parameters and responds with an error if invalid.
+// Returns the UUID and true if successful, or uuid.Nil and false if parsing failed (error response already sent).
+func parseUUIDOrRespond(w http.ResponseWriter, r *http.Request, paramName, entityName string) (uuid.UUID, bool) {
+	id, err := parseUUID(r, paramName)
+	if err != nil {
+		respondError(w, http.StatusBadRequest,
+			fmt.Sprintf("invalid %s ID: must be a valid UUID", entityName))
+		return uuid.Nil, false
+	}
+	return id, true
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/session"
 )
@@ -48,12 +49,22 @@ func (m *AuthMiddleware) Handler(next http.Handler) http.Handler {
 			return
 		}
 
+		// Parse session ID as UUID
+		sessionID, err := uuid.Parse(cookie.Value)
+		if err != nil {
+			m.logger.Warn(r.Context(), "invalid session ID format", map[string]interface{}{
+				"error": err.Error(),
+			})
+			respondError(w, http.StatusUnauthorized, "invalid session")
+			return
+		}
+
 		// Validate session
-		sess, err := m.sessionManager.Get(cookie.Value)
+		sess, err := m.sessionManager.Get(sessionID)
 		if err != nil {
 			m.logger.Warn(r.Context(), "invalid or expired session", map[string]interface{}{
 				"error":      err.Error(),
-				"session_id": cookie.Value,
+				"session_id": sessionID.String(),
 			})
 			respondError(w, http.StatusUnauthorized, "invalid or expired session")
 			return
@@ -69,8 +80,8 @@ func (m *AuthMiddleware) Handler(next http.Handler) http.Handler {
 }
 
 // GetUserID extracts the user ID from the request context.
-func GetUserID(ctx context.Context) (uint, bool) {
-	userID, ok := ctx.Value(UserIDKey).(uint)
+func GetUserID(ctx context.Context) (uuid.UUID, bool) {
+	userID, ok := ctx.Value(UserIDKey).(uuid.UUID)
 	return userID, ok
 }
 

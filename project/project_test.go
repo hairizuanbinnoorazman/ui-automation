@@ -3,10 +3,12 @@ package project
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestProject_Validate(t *testing.T) {
+	ownerID := uuid.New()
 	tests := []struct {
 		name    string
 		project Project
@@ -16,7 +18,7 @@ func TestProject_Validate(t *testing.T) {
 			name: "valid project",
 			project: Project{
 				Name:    "Test Project",
-				OwnerID: 1,
+				OwnerID: ownerID,
 			},
 			wantErr: nil,
 		},
@@ -25,14 +27,14 @@ func TestProject_Validate(t *testing.T) {
 			project: Project{
 				Name:        "Test Project",
 				Description: "A test project description",
-				OwnerID:     1,
+				OwnerID:     ownerID,
 			},
 			wantErr: nil,
 		},
 		{
 			name: "missing name",
 			project: Project{
-				OwnerID: 1,
+				OwnerID: ownerID,
 			},
 			wantErr: ErrInvalidProjectName,
 		},
