@@ -5,6 +5,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
+import Material.Button as Button
 import Types exposing (LoginCredentials, RegisterCredentials, User)
 
 
@@ -195,26 +196,25 @@ view model =
               else
                 viewRegisterForm model
             , Html.div [ Html.Attributes.style "margin-top" "16px" ]
-                [ Html.button
-                    [ Html.Events.onClick
-                        (SetMode
-                            (if model.mode == LoginMode then
-                                RegisterMode
+                [ Button.text
+                    (Button.config
+                        |> Button.setOnClick
+                            (SetMode
+                                (if model.mode == LoginMode then
+                                    RegisterMode
 
-                             else
-                                LoginMode
+                                 else
+                                    LoginMode
+                                )
                             )
-                        )
-                    , Html.Attributes.class "mdc-button"
-                    ]
-                    [ Html.text
-                        (if model.mode == LoginMode then
-                            "Need an account? Register"
+                        |> Button.setAttributes [ Html.Attributes.style "width" "100%" ]
+                    )
+                    (if model.mode == LoginMode then
+                        "Need an account? Register"
 
-                         else
-                            "Have an account? Login"
-                        )
-                    ]
+                     else
+                        "Have an account? Login"
+                    )
                 ]
             ]
         ]
@@ -247,19 +247,18 @@ viewLoginForm model =
                 ]
                 []
             ]
-        , Html.button
-            [ Html.Events.onClick SubmitLogin
-            , Html.Attributes.disabled model.loading
-            , Html.Attributes.class "mdc-button mdc-button--raised"
-            ]
-            [ Html.text
-                (if model.loading then
-                    "Logging in..."
+        , Button.raised
+            (Button.config
+                |> Button.setOnClick SubmitLogin
+                |> Button.setDisabled model.loading
+                |> Button.setAttributes [ Html.Attributes.style "width" "100%" ]
+            )
+            (if model.loading then
+                "Logging in..."
 
-                 else
-                    "Login"
-                )
-            ]
+             else
+                "Login"
+            )
         ]
 
 
@@ -314,19 +313,18 @@ viewRegisterForm model =
                 ]
                 []
             ]
-        , Html.button
-            [ Html.Events.onClick SubmitRegister
-            , Html.Attributes.disabled model.loading
-            , Html.Attributes.class "mdc-button mdc-button--raised"
-            ]
-            [ Html.text
-                (if model.loading then
-                    "Registering..."
+        , Button.raised
+            (Button.config
+                |> Button.setOnClick SubmitRegister
+                |> Button.setDisabled model.loading
+                |> Button.setAttributes [ Html.Attributes.style "width" "100%" ]
+            )
+            (if model.loading then
+                "Registering..."
 
-                 else
-                    "Register"
-                )
-            ]
+             else
+                "Register"
+            )
         ]
 
 
