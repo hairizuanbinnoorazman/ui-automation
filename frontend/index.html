@@ -4,47 +4,14 @@
   <meta charset="UTF-8">
   <title>UI Automation</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Material Design CSS -->
   <link rel="stylesheet" href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css">
-
-  <style>
-    body {
-      padding: 0;
-      margin: 0;
-      font-family: Roboto, sans-serif;
-    }
-  </style>
 </head>
 
 <body>
   <div id="elm"></div>
-
-  <!-- Load the compiled Elm application -->
   <script src="elm.js"></script>
-
   <script>
-    try {
-      var app = Elm.App.init({
-        node: document.getElementById("elm")
-      });
-    }
-    catch (e) {
-      // Display initialization errors
-      var header = document.createElement("h1");
-      header.style.fontFamily = "monospace";
-      header.style.color = "red";
-      header.innerText = "Initialization Error";
-      var pre = document.createElement("pre");
-      pre.innerText = e;
-      pre.style.fontFamily = "monospace";
-      document.body.insertBefore(header, document.body.firstChild);
-      document.body.insertBefore(pre, header.nextSibling);
-      throw e;
-    }
+    Elm.App.init({ node: document.getElementById("elm") });
   </script>
-
-  <!-- Material Design JavaScript (optional, for interactive components) -->
-  <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
 </body>
 </html>

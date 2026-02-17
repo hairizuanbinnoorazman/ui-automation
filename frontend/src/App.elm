@@ -242,7 +242,18 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "UI Automation"
     , body =
-        [ Html.div
+        [ Html.node "style"
+            []
+            [ Html.text """
+                body {
+                    padding: 0;
+                    margin: 0;
+                    font-family: Roboto, sans-serif;
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                }
+            """ ]
+        , Html.div
             [ Html.Attributes.class "mdc-drawer-app-content" ]
             [ viewTopAppBar model
             , Html.div
