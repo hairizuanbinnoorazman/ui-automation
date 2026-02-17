@@ -315,6 +315,44 @@ view model =
                     -webkit-font-smoothing: antialiased;
                     -moz-osx-font-smoothing: grayscale;
                 }
+
+                /* Responsive main content padding */
+                .app-main-content {
+                    padding: 16px;
+                }
+
+                @media (min-width: 600px) {
+                    .app-main-content {
+                        padding: 24px;
+                    }
+                }
+
+                @media (min-width: 1024px) {
+                    .app-main-content {
+                        padding: 32px 48px;
+                    }
+                }
+
+                /* Responsive page header spacing */
+                .page-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    margin-top: 0;
+                }
+
+                @media (min-width: 600px) {
+                    .page-header {
+                        margin-top: 8px;
+                    }
+                }
+
+                @media (min-width: 1024px) {
+                    .page-header {
+                        margin-top: 16px;
+                    }
+                }
             """ ]
         , Html.div
             [ Html.Attributes.class "mdc-drawer-app-content" ]
@@ -327,8 +365,8 @@ view model =
                   else
                     Html.text ""
                 , Html.main_
-                    [ Html.Attributes.style "flex-grow" "1"
-                    , Html.Attributes.style "padding" "20px"
+                    [ Html.Attributes.class "app-main-content"
+                    , Html.Attributes.style "flex-grow" "1"
                     ]
                     [ viewContent model ]
                 ]

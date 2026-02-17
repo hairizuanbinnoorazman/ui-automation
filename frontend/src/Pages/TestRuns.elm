@@ -308,10 +308,7 @@ view model =
             [ Html.div
                 [ Html.Attributes.style "flex" "2" ]
                 [ Html.div
-                    [ Html.Attributes.style "display" "flex"
-                    , Html.Attributes.style "justify-content" "space-between"
-                    , Html.Attributes.style "align-items" "center"
-                    , Html.Attributes.style "margin-bottom" "20px"
+                    [ Html.Attributes.class "page-header"
                     ]
                     [ Html.h1 [ Html.Attributes.class "mdc-typography--headline3" ] [ Html.text "Test Runs" ]
                     , Html.button
