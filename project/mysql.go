@@ -147,3 +147,22 @@ func (s *MySQLStore) ListByOwner(ctx context.Context, ownerID uuid.UUID, limit, 
 
 	return projects, nil
 }
+
+// CountByOwner returns the total count of active projects for a specific owner.
+func (s *MySQLStore) CountByOwner(ctx context.Context, ownerID uuid.UUID) (int, error) {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&Project{}).
+		Where("owner_id = ? AND is_active = ?", ownerID, true).
+		Count(&count).Error
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to count projects by owner", map[string]interface{}{
+			"error":    err.Error(),
+			"owner_id": ownerID.String(),
+		})
+		return 0, err
+	}
+
+	return int(count), nil
+}

@@ -20,6 +20,25 @@ type SuccessResponse struct {
 	Message string `json:"message"`
 }
 
+// PaginatedResponse represents a standardized paginated API response.
+// All list endpoints should return this format to match frontend expectations.
+type PaginatedResponse struct {
+	Items  interface{} `json:"items"`
+	Total  int         `json:"total"`
+	Limit  int         `json:"limit"`
+	Offset int         `json:"offset"`
+}
+
+// NewPaginatedResponse creates a new paginated response.
+func NewPaginatedResponse(items interface{}, total, limit, offset int) PaginatedResponse {
+	return PaginatedResponse{
+		Items:  items,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	}
+}
+
 // respondJSON writes a JSON response with the given status code.
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

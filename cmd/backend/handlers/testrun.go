@@ -54,18 +54,6 @@ type CompleteTestRunRequest struct {
 	Notes  string         `json:"notes"`
 }
 
-// ListTestRunsResponse represents a list test runs response.
-type ListTestRunsResponse struct {
-	TestRuns []*testrun.TestRun `json:"test_runs"`
-	Total    int                `json:"total"`
-}
-
-// ListAssetsResponse represents a list assets response.
-type ListAssetsResponse struct {
-	Assets []*testrun.TestRunAsset `json:"assets"`
-	Total  int                     `json:"total"`
-}
-
 // Create handles creating a new test run.
 func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
@@ -134,6 +122,17 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get total count of test runs
+	total, err := h.testRunStore.CountByTestProcedure(r.Context(), procedureID)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to count test runs", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to count test runs")
+		return
+	}
+
 	// List test runs
 	runs, err := h.testRunStore.ListByTestProcedure(r.Context(), procedureID, limit, offset)
 	if err != nil {
@@ -145,10 +144,7 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ListTestRunsResponse{
-		TestRuns: runs,
-		Total:    len(runs),
-	})
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(runs, total, limit, offset))
 }
 
 // GetByID handles getting a single test run by ID.
@@ -217,7 +213,18 @@ func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondSuccess(w, "test run updated successfully")
+	// Get updated test run to return it
+	updatedRun, err := h.testRunStore.GetByID(r.Context(), id)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to get updated test run", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get updated test run")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, updatedRun)
 }
 
 // Start handles starting a test run.
@@ -246,7 +253,18 @@ func (h *TestRunHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondSuccess(w, "test run started successfully")
+	// Get the started test run to return it
+	startedRun, err := h.testRunStore.GetByID(r.Context(), id)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to get started test run", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get started test run")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, startedRun)
 }
 
 // Complete handles completing a test run.
@@ -282,7 +300,18 @@ func (h *TestRunHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondSuccess(w, "test run completed successfully")
+	// Get the completed test run to return it
+	completedRun, err := h.testRunStore.GetByID(r.Context(), id)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to get completed test run", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get completed test run")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, completedRun)
 }
 
 // UploadAsset handles uploading an asset for a test run.
@@ -405,10 +434,7 @@ func (h *TestRunHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ListAssetsResponse{
-		Assets: assets,
-		Total:  len(assets),
-	})
+	respondJSON(w, http.StatusOK, assets)
 }
 
 // DownloadAsset handles downloading an asset.

@@ -37,12 +37,6 @@ type UpdateTestProcedureRequest struct {
 	Steps       *testprocedure.Steps         `json:"steps,omitempty"`
 }
 
-// ListTestProceduresResponse represents a list test procedures response.
-type ListTestProceduresResponse struct {
-	TestProcedures []*testprocedure.TestProcedure `json:"test_procedures"`
-	Total          int                             `json:"total"`
-}
-
 // Create handles creating a new test procedure.
 func (h *TestProcedureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
@@ -116,6 +110,17 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get total count of test procedures
+	total, err := h.testProcedureStore.CountByProject(r.Context(), projectID)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to count test procedures", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": projectID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to count test procedures")
+		return
+	}
+
 	// List test procedures
 	procedures, err := h.testProcedureStore.ListByProject(r.Context(), projectID, limit, offset)
 	if err != nil {
@@ -127,10 +132,7 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ListTestProceduresResponse{
-		TestProcedures: procedures,
-		Total:          len(procedures),
-	})
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(procedures, total, limit, offset))
 }
 
 // GetByID handles getting a single test procedure by ID.
@@ -209,7 +211,18 @@ func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondSuccess(w, "test procedure updated successfully")
+	// Get updated test procedure to return it
+	updatedProcedure, err := h.testProcedureStore.GetByID(r.Context(), id)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to get updated test procedure", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get updated test procedure")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, updatedProcedure)
 }
 
 // Delete handles deleting a test procedure.
@@ -286,8 +299,5 @@ func (h *TestProcedureHandler) GetVersionHistory(w http.ResponseWriter, r *http.
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ListTestProceduresResponse{
-		TestProcedures: versions,
-		Total:          len(versions),
-	})
+	respondJSON(w, http.StatusOK, versions)
 }

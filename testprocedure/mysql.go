@@ -153,6 +153,25 @@ func (s *MySQLStore) ListByProject(ctx context.Context, projectID uuid.UUID, lim
 	return testProcedures, nil
 }
 
+// CountByProject returns the total count of latest test procedures for a specific project.
+func (s *MySQLStore) CountByProject(ctx context.Context, projectID uuid.UUID) (int, error) {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&TestProcedure{}).
+		Where("project_id = ? AND is_latest = ?", projectID, true).
+		Count(&count).Error
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to count test procedures by project", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": projectID.String(),
+		})
+		return 0, err
+	}
+
+	return int(count), nil
+}
+
 // CreateVersion creates a new version of an existing test procedure.
 // This creates an immutable copy with incremented version number.
 func (s *MySQLStore) CreateVersion(ctx context.Context, originalID uuid.UUID) (*TestProcedure, error) {

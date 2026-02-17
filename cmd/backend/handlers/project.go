@@ -35,12 +35,6 @@ type UpdateProjectRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
-// ListProjectsResponse represents a list projects response.
-type ListProjectsResponse struct {
-	Projects []*project.Project `json:"projects"`
-	Total    int                `json:"total"`
-}
-
 // Create handles creating a new project.
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
@@ -108,6 +102,17 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get total count of projects
+	total, err := h.projectStore.CountByOwner(r.Context(), userID)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to count projects", map[string]interface{}{
+			"error":   err.Error(),
+			"user_id": userID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to count projects")
+		return
+	}
+
 	// List projects for user
 	projects, err := h.projectStore.ListByOwner(r.Context(), userID, limit, offset)
 	if err != nil {
@@ -119,10 +124,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ListProjectsResponse{
-		Projects: projects,
-		Total:    len(projects),
-	})
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(projects, total, limit, offset))
 }
 
 // GetByID handles getting a single project by ID.
@@ -198,7 +200,18 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondSuccess(w, "project updated successfully")
+	// Get updated project to return it
+	updatedProject, err := h.projectStore.GetByID(r.Context(), id)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to get updated project", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get updated project")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, updatedProject)
 }
 
 // Delete handles soft deleting a project.

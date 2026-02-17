@@ -23,6 +23,9 @@ type Store interface {
 	// ListByProject retrieves a paginated list of latest test procedures for a specific project.
 	ListByProject(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]*TestProcedure, error)
 
+	// CountByProject returns the total count of latest test procedures for a specific project.
+	CountByProject(ctx context.Context, projectID uuid.UUID) (int, error)
+
 	// CreateVersion creates a new version of an existing test procedure.
 	// This creates an immutable copy with incremented version number.
 	CreateVersion(ctx context.Context, originalID uuid.UUID) (*TestProcedure, error)
