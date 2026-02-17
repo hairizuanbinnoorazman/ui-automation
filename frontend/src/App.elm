@@ -1,10 +1,12 @@
 module App exposing (main)
 
+import API
 import Browser
 import Browser.Navigation as Nav
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Http
 import Pages.Login as Login
 import Pages.Projects as Projects
 import Pages.TestProcedures as TestProcedures
@@ -106,6 +108,7 @@ type Msg
     | TestProceduresMsg TestProcedures.Msg
     | TestRunsMsg TestRuns.Msg
     | Logout
+    | LogoutResponse (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -216,6 +219,21 @@ update msg model =
                     ( model, Cmd.none )
 
         Logout ->
+            ( model
+            , API.logout LogoutResponse
+            )
+
+        LogoutResponse (Ok ()) ->
+            ( { model
+                | user = Nothing
+                , route = Login
+                , drawerOpen = False
+              }
+            , Nav.pushUrl model.key "/"
+            )
+
+        LogoutResponse (Err _) ->
+            -- Even if logout fails on server, clear local state
             ( { model
                 | user = Nothing
                 , route = Login
