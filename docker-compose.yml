@@ -9,6 +9,11 @@ services:
     container_name: ui-automation-frontend
     ports:
       - "8080:80"
+    volumes:
+      # Mount locally-built Elm application for live development
+      # Rebuild with: cd frontend && elm make src/App.elm --output=elm.js
+      - ./frontend/elm.js:/usr/share/nginx/html/elm.js:ro
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -77,8 +82,6 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: ui_automation
-    volumes:
-      - mysql_data:/var/lib/mysql
     networks:
       - ui-automation-network
     healthcheck:
@@ -92,5 +95,4 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:
   uploads_data:

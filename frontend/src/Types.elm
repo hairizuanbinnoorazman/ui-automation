@@ -1,5 +1,6 @@
 module Types exposing (..)
 
+import Iso8601
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Time
@@ -300,16 +301,7 @@ paginatedDecoder itemDecoder =
 
 timeDecoder : Decoder Time.Posix
 timeDecoder =
-    Decode.string
-        |> Decode.andThen
-            (\str ->
-                case String.toInt str of
-                    Just ms ->
-                        Decode.succeed (Time.millisToPosix ms)
-
-                    Nothing ->
-                        Decode.fail "Invalid timestamp"
-            )
+    Iso8601.decoder
 
 
 

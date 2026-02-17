@@ -1,4 +1,4 @@
-module Pages.Login exposing (Model, Msg, init, update, view)
+module Pages.Register exposing (Model, Msg, init, update, view)
 
 import API
 import Html exposing (Html)
@@ -6,7 +6,7 @@ import Html.Attributes
 import Html.Events
 import Http
 import Material.Button as Button
-import Types exposing (LoginCredentials, User)
+import Types exposing (RegisterCredentials, User)
 
 
 
@@ -15,7 +15,9 @@ import Types exposing (LoginCredentials, User)
 
 type alias Model =
     { email : String
+    , username : String
     , password : String
+    , confirmPassword : String
     , error : Maybe String
     , loading : Bool
     , successfulUser : Maybe User
@@ -25,7 +27,9 @@ type alias Model =
 init : Model
 init =
     { email = ""
+    , username = ""
     , password = ""
+    , confirmPassword = ""
     , error = Nothing
     , loading = False
     , successfulUser = Nothing
@@ -38,9 +42,11 @@ init =
 
 type Msg
     = SetEmail String
+    | SetUsername String
     | SetPassword String
-    | SubmitLogin
-    | LoginResponse (Result Http.Error User)
+    | SetConfirmPassword String
+    | SubmitRegister
+    | RegisterResponse (Result Http.Error User)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -49,23 +55,36 @@ update msg model =
         SetEmail email ->
             ( { model | email = email }, Cmd.none )
 
+        SetUsername username ->
+            ( { model | username = username }, Cmd.none )
+
         SetPassword password ->
             ( { model | password = password }, Cmd.none )
 
-        SubmitLogin ->
-            if String.isEmpty model.email || String.isEmpty model.password then
-                ( { model | error = Just "Email and password are required" }, Cmd.none )
+        SetConfirmPassword confirmPassword ->
+            ( { model | confirmPassword = confirmPassword }, Cmd.none )
+
+        SubmitRegister ->
+            if String.isEmpty model.email || String.isEmpty model.username || String.isEmpty model.password then
+                ( { model | error = Just "All fields are required" }, Cmd.none )
+
+            else if model.password /= model.confirmPassword then
+                ( { model | error = Just "Passwords do not match" }, Cmd.none )
+
+            else if String.length model.password < 8 then
+                ( { model | error = Just "Password must be at least 8 characters" }, Cmd.none )
 
             else
                 ( { model | loading = True, error = Nothing }
-                , API.login
+                , API.register
                     { email = model.email
+                    , username = model.username
                     , password = model.password
                     }
-                    LoginResponse
+                    RegisterResponse
                 )
 
-        LoginResponse (Ok user) ->
+        RegisterResponse (Ok user) ->
             ( { model
                 | loading = False
                 , successfulUser = Just user
@@ -73,7 +92,7 @@ update msg model =
             , Cmd.none
             )
 
-        LoginResponse (Err error) ->
+        RegisterResponse (Err error) ->
             ( { model
                 | loading = False
                 , error = Just (httpErrorToString error)
@@ -101,7 +120,7 @@ view model =
             ]
             [ Html.h2
                 [ Html.Attributes.class "mdc-typography--headline4" ]
-                [ Html.text "Login" ]
+                [ Html.text "Create Account" ]
             , case model.error of
                 Just err ->
                     Html.div
@@ -113,10 +132,10 @@ view model =
 
                 Nothing ->
                     Html.text ""
-            , viewLoginForm model
+            , viewRegisterForm model
             , Html.div [ Html.Attributes.style "margin-top" "16px" ]
                 [ Html.a
-                    [ Html.Attributes.href "/register"
+                    [ Html.Attributes.href "/"
                     , Html.Attributes.class "mdc-button"
                     , Html.Attributes.style "width" "100%"
                     , Html.Attributes.style "text-decoration" "none"
@@ -124,15 +143,15 @@ view model =
                     , Html.Attributes.style "text-align" "center"
                     ]
                     [ Html.span [ Html.Attributes.class "mdc-button__label" ]
-                        [ Html.text "Need an account? Register" ]
+                        [ Html.text "Have an account? Login" ]
                     ]
                 ]
             ]
         ]
 
 
-viewLoginForm : Model -> Html Msg
-viewLoginForm model =
+viewRegisterForm : Model -> Html Msg
+viewRegisterForm model =
     Html.div []
         [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
             [ Html.label [] [ Html.text "Email" ]
@@ -140,6 +159,18 @@ viewLoginForm model =
                 [ Html.Attributes.type_ "email"
                 , Html.Attributes.value model.email
                 , Html.Events.onInput SetEmail
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Username" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value model.username
+                , Html.Events.onInput SetUsername
                 , Html.Attributes.required True
                 , Html.Attributes.class "mdc-text-field__input"
                 , Html.Attributes.style "width" "100%"
@@ -158,17 +189,29 @@ viewLoginForm model =
                 ]
                 []
             ]
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Confirm Password" ]
+            , Html.input
+                [ Html.Attributes.type_ "password"
+                , Html.Attributes.value model.confirmPassword
+                , Html.Events.onInput SetConfirmPassword
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
         , Button.raised
             (Button.config
-                |> Button.setOnClick SubmitLogin
+                |> Button.setOnClick SubmitRegister
                 |> Button.setDisabled model.loading
                 |> Button.setAttributes [ Html.Attributes.style "width" "100%" ]
             )
             (if model.loading then
-                "Logging in..."
+                "Creating Account..."
 
              else
-                "Login"
+                "Create Account"
             )
         ]
 
