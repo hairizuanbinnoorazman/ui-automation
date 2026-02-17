@@ -42,6 +42,7 @@ type alias Model =
     , url : Url.Url
     , route : Route
     , user : Maybe User
+    , sessionCheckStatus : SessionCheckStatus
     , drawerOpen : Bool
     , loginModel : Login.Model
     , registerModel : Register.Model
@@ -60,42 +61,30 @@ type Route
     | NotFound
 
 
+type SessionCheckStatus
+    = CheckingSession
+    | SessionChecked
+
+
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
     let
         route =
             parseUrl url
-
-        ( loginModel, loginCmd ) =
-            ( Login.init, Cmd.none )
-
-        ( projectsModel, projectsCmd ) =
-            case route of
-                Projects ->
-                    let
-                        ( pm, pc ) =
-                            Projects.init
-                    in
-                    ( Just pm, Cmd.map ProjectsMsg pc )
-
-                _ ->
-                    ( Nothing, Cmd.none )
     in
     ( { key = key
       , url = url
       , route = route
       , user = Nothing
+      , sessionCheckStatus = CheckingSession
       , drawerOpen = False
-      , loginModel = loginModel
+      , loginModel = Login.init
       , registerModel = Register.init
-      , projectsModel = projectsModel
+      , projectsModel = Nothing
       , testProceduresModel = Nothing
       , testRunsModel = Nothing
       }
-    , Cmd.batch
-        [ loginCmd
-        , projectsCmd
-        ]
+    , API.getMe SessionCheckResponse
     )
 
 
@@ -107,6 +96,7 @@ type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
     | ToggleDrawer
+    | SessionCheckResponse (Result Http.Error User)
     | LoginMsg Login.Msg
     | RegisterMsg Register.Msg
     | ProjectsMsg Projects.Msg
@@ -175,6 +165,90 @@ update msg model =
                             ( model, Cmd.none )
             in
             ( { newModel | url = url, route = route }, cmd )
+
+        SessionCheckResponse (Ok user) ->
+            -- Valid session found - set user and navigate appropriately
+            let
+                ( newModel, cmd ) =
+                    case model.route of
+                        Login ->
+                            -- User has valid session but on login page, redirect to projects
+                            let
+                                ( pm, pc ) =
+                                    Projects.init
+                            in
+                            ( { model
+                                | user = Just user
+                                , route = Projects
+                                , projectsModel = Just pm
+                              }
+                            , Cmd.batch
+                                [ Nav.pushUrl model.key "/projects"
+                                , Cmd.map ProjectsMsg pc
+                                ]
+                            )
+
+                        Register ->
+                            -- User has valid session but on register page, redirect to projects
+                            let
+                                ( pm, pc ) =
+                                    Projects.init
+                            in
+                            ( { model
+                                | user = Just user
+                                , route = Projects
+                                , projectsModel = Just pm
+                              }
+                            , Cmd.batch
+                                [ Nav.pushUrl model.key "/projects"
+                                , Cmd.map ProjectsMsg pc
+                                ]
+                            )
+
+                        Projects ->
+                            let
+                                ( pm, pc ) =
+                                    Projects.init
+                            in
+                            ( { model
+                                | user = Just user
+                                , projectsModel = Just pm
+                              }
+                            , Cmd.map ProjectsMsg pc
+                            )
+
+                        TestProcedures projectId ->
+                            let
+                                ( pm, pc ) =
+                                    TestProcedures.init projectId
+                            in
+                            ( { model
+                                | user = Just user
+                                , testProceduresModel = Just pm
+                              }
+                            , Cmd.map TestProceduresMsg pc
+                            )
+
+                        TestRuns procedureId ->
+                            let
+                                ( pm, pc ) =
+                                    TestRuns.init procedureId
+                            in
+                            ( { model
+                                | user = Just user
+                                , testRunsModel = Just pm
+                              }
+                            , Cmd.map TestRunsMsg pc
+                            )
+
+                        NotFound ->
+                            ( { model | user = Just user }, Cmd.none )
+            in
+            ( { newModel | sessionCheckStatus = SessionChecked }, cmd )
+
+        SessionCheckResponse (Err _) ->
+            -- No valid session or error - user stays on login/current page
+            ( { model | sessionCheckStatus = SessionChecked }, Cmd.none )
 
         ToggleDrawer ->
             ( { model | drawerOpen = not model.drawerOpen }, Cmd.none )
@@ -283,6 +357,7 @@ update msg model =
                 | user = Nothing
                 , route = Login
                 , drawerOpen = False
+                , sessionCheckStatus = SessionChecked
               }
             , Nav.pushUrl model.key "/"
             )
@@ -293,6 +368,7 @@ update msg model =
                 | user = Nothing
                 , route = Login
                 , drawerOpen = False
+                , sessionCheckStatus = SessionChecked
               }
             , Nav.pushUrl model.key "/"
             )
@@ -466,42 +542,72 @@ viewDrawer model =
 
 viewContent : Model -> Html Msg
 viewContent model =
-    case model.route of
-        Login ->
-            Html.map LoginMsg (Login.view model.loginModel)
-
-        Register ->
-            Html.map RegisterMsg (Register.view model.registerModel)
-
-        Projects ->
-            case model.projectsModel of
-                Just projectsModel ->
-                    Html.map ProjectsMsg (Projects.view projectsModel)
-
-                Nothing ->
-                    Html.div [] [ Html.text "Loading..." ]
-
-        TestProcedures _ ->
-            case model.testProceduresModel of
-                Just testProceduresModel ->
-                    Html.map TestProceduresMsg (TestProcedures.view testProceduresModel)
-
-                Nothing ->
-                    Html.div [] [ Html.text "Loading..." ]
-
-        TestRuns _ ->
-            case model.testRunsModel of
-                Just testRunsModel ->
-                    Html.map TestRunsMsg (TestRuns.view testRunsModel)
-
-                Nothing ->
-                    Html.div [] [ Html.text "Loading..." ]
-
-        NotFound ->
-            Html.div []
-                [ Html.h1 [] [ Html.text "404 Not Found" ]
-                , Html.p [] [ Html.text "The page you're looking for doesn't exist." ]
+    case model.sessionCheckStatus of
+        CheckingSession ->
+            -- Show loading while checking session
+            Html.div
+                [ Html.Attributes.style "display" "flex"
+                , Html.Attributes.style "justify-content" "center"
+                , Html.Attributes.style "align-items" "center"
+                , Html.Attributes.style "height" "80vh"
                 ]
+                [ Html.div []
+                    [ Html.text "Loading..." ]
+                ]
+
+        SessionChecked ->
+            -- Show content based on route and authentication status
+            case model.route of
+                Login ->
+                    Html.map LoginMsg (Login.view model.loginModel)
+
+                Register ->
+                    Html.map RegisterMsg (Register.view model.registerModel)
+
+                Projects ->
+                    case model.user of
+                        Just _ ->
+                            case model.projectsModel of
+                                Just projectsModel ->
+                                    Html.map ProjectsMsg (Projects.view projectsModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
+                TestProcedures _ ->
+                    case model.user of
+                        Just _ ->
+                            case model.testProceduresModel of
+                                Just testProceduresModel ->
+                                    Html.map TestProceduresMsg (TestProcedures.view testProceduresModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
+                TestRuns _ ->
+                    case model.user of
+                        Just _ ->
+                            case model.testRunsModel of
+                                Just testRunsModel ->
+                                    Html.map TestRunsMsg (TestRuns.view testRunsModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
+                NotFound ->
+                    Html.div []
+                        [ Html.h1 [] [ Html.text "404 Not Found" ]
+                        , Html.p [] [ Html.text "The page you're looking for doesn't exist." ]
+                        ]
 
 
 

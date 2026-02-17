@@ -146,6 +146,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	apiRouter.Use(authMiddleware.Handler)
 
+	// Session validation endpoint (protected by AuthMiddleware)
+	apiRouter.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET")
+
 	apiRouter.HandleFunc("/users", userHandler.List).Methods("GET")
 	apiRouter.HandleFunc("/users/{id}", userHandler.GetByID).Methods("GET")
 	apiRouter.HandleFunc("/users/{id}", userHandler.Update).Methods("PUT")

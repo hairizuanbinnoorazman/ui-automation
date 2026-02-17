@@ -182,6 +182,56 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	respondSuccess(w, "logged out successfully")
 }
 
+// GetMe handles retrieving current authenticated user information from session.
+// This endpoint is protected by AuthMiddleware, which validates the session cookie
+// and populates the context with user information.
+func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from context (set by AuthMiddleware)
+	userID, ok := GetUserID(r.Context())
+	if !ok {
+		// This should never happen if AuthMiddleware is working correctly
+		h.logger.Error(r.Context(), "user ID not found in context", nil)
+		respondError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	// Get full user details from database
+	currentUser, err := h.userStore.GetByID(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, user.ErrUserNotFound) {
+			// User was deleted but session still exists
+			h.logger.Warn(r.Context(), "user not found for valid session", map[string]interface{}{
+				"user_id": userID.String(),
+			})
+			respondError(w, http.StatusUnauthorized, "user not found")
+			return
+		}
+		h.logger.Error(r.Context(), "failed to get user", map[string]interface{}{
+			"error":   err.Error(),
+			"user_id": userID.String(),
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get user")
+		return
+	}
+
+	// Check if user is active
+	if !currentUser.IsActive {
+		h.logger.Warn(r.Context(), "inactive user attempted to validate session", map[string]interface{}{
+			"user_id": userID.String(),
+			"email":   currentUser.Email,
+		})
+		respondError(w, http.StatusUnauthorized, "user account is inactive")
+		return
+	}
+
+	h.logger.Info(r.Context(), "session validated successfully", map[string]interface{}{
+		"user_id": userID.String(),
+		"email":   currentUser.Email,
+	})
+
+	respondJSON(w, http.StatusOK, currentUser)
+}
+
 // setSessionCookie sets a session cookie in the response.
 func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, sessionID uuid.UUID) {
 	http.SetCookie(w, &http.Cookie{
