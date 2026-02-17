@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Automation</title>
+
+    <!-- Material Components Web CSS -->
+    <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
+
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <!-- Roboto Font -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Roboto, sans-serif;
+        }
+
+        .mdc-drawer-app-content {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .mdc-text-field {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .mdc-button {
+            margin: 10px 5px;
+        }
+
+        .mdc-dialog .mdc-dialog__surface {
+            max-width: 600px;
+        }
+
+        .mdc-card {
+            margin: 10px 0;
+        }
+
+        .mdc-data-table {
+            width: 100%;
+        }
+
+        .mdc-drawer {
+            position: relative;
+        }
+
+        .mdc-layout-grid {
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <!-- Material Components Web JavaScript -->
+    <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
+
+    <!-- Elm Application -->
+    <script src="elm.js"></script>
+    <script>
+        var app = Elm.App.init({
+            node: document.getElementById('app')
+        });
+
+        // Initialize Material Components
+        window.addEventListener('load', function() {
+            // Auto-initialize all Material Components
+            mdc.autoInit();
+        });
+    </script>
+</body>
+</html>
