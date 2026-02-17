@@ -338,6 +338,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	scriptGenHandler := handlers.NewScriptGenHandler(
 		scriptStore,
 		testProcedureStore,
+		projectStore,
 		scriptGenerator,
 		blobStorage,
 		log,
