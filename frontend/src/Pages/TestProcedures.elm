@@ -3,15 +3,8 @@ module Pages.TestProcedures exposing (Model, Msg, init, update, view)
 import API
 import Html exposing (Html)
 import Html.Attributes
+import Html.Events
 import Http
-import Json.Encode as Encode
-import Material.Button as Button
-import Material.Card as Card
-import Material.DataTable as DataTable
-import Material.Dialog as Dialog
-import Material.LayoutGrid as LayoutGrid
-import Material.TextField as TextField
-import Material.Typography as Typography
 import Time
 import Types exposing (PaginatedResponse, TestProcedure, TestProcedureInput, TestStep)
 
@@ -355,46 +348,35 @@ update msg model =
 view : Model -> Html Msg
 view model =
     Html.div []
-        [ LayoutGrid.layoutGrid []
-            [ LayoutGrid.cell
-                [ LayoutGrid.span12 ]
-                [ Html.div
-                    [ Html.Attributes.style "display" "flex"
-                    , Html.Attributes.style "justify-content" "space-between"
-                    , Html.Attributes.style "align-items" "center"
+        [ Html.div
+            [ Html.Attributes.style "display" "flex"
+            , Html.Attributes.style "justify-content" "space-between"
+            , Html.Attributes.style "align-items" "center"
+            , Html.Attributes.style "margin-bottom" "20px"
+            ]
+            [ Html.h1 [ Html.Attributes.class "mdc-typography--headline3" ] [ Html.text "Test Procedures" ]
+            , Html.button
+                [ Html.Events.onClick OpenCreateDialog
+                , Html.Attributes.class "mdc-button mdc-button--raised"
+                ]
+                [ Html.text "Create Procedure" ]
+            ]
+        , case model.error of
+            Just err ->
+                Html.div
+                    [ Html.Attributes.style "color" "red"
                     , Html.Attributes.style "margin-bottom" "20px"
                     ]
-                    [ Html.h1 [ Typography.headline3 ] [ Html.text "Test Procedures" ]
-                    , Button.raised
-                        (Button.config |> Button.setOnClick (Just OpenCreateDialog))
-                        "Create Procedure"
-                    ]
-                ]
-            , LayoutGrid.cell
-                [ LayoutGrid.span12 ]
-                [ case model.error of
-                    Just err ->
-                        Html.div
-                            [ Html.Attributes.style "color" "red"
-                            , Html.Attributes.style "margin-bottom" "20px"
-                            ]
-                            [ Html.text err ]
+                    [ Html.text err ]
 
-                    Nothing ->
-                        Html.text ""
-                ]
-            , LayoutGrid.cell
-                [ LayoutGrid.span12 ]
-                [ if model.loading && List.isEmpty model.procedures then
-                    Html.div [] [ Html.text "Loading..." ]
+            Nothing ->
+                Html.text ""
+        , if model.loading && List.isEmpty model.procedures then
+            Html.div [] [ Html.text "Loading..." ]
 
-                  else
-                    viewProceduresTable model.procedures
-                ]
-            , LayoutGrid.cell
-                [ LayoutGrid.span12 ]
-                [ viewPagination model ]
-            ]
+          else
+            viewProceduresTable model.procedures
+        , viewPagination model
         , case model.createDialog of
             Just dialog ->
                 viewCreateDialog dialog
@@ -418,28 +400,31 @@ view model =
 
 viewProceduresTable : List TestProcedure -> Html Msg
 viewProceduresTable procedures =
-    DataTable.dataTable
-        (DataTable.config |> DataTable.setAttributes [ Typography.typography ])
-        { thead =
-            [ DataTable.row []
-                [ DataTable.cell [] [ Html.text "Name" ]
-                , DataTable.cell [] [ Html.text "Description" ]
-                , DataTable.cell [] [ Html.text "Version" ]
-                , DataTable.cell [] [ Html.text "Steps" ]
-                , DataTable.cell [] [ Html.text "Actions" ]
+    Html.table
+        [ Html.Attributes.class "mdc-data-table__table"
+        , Html.Attributes.style "width" "100%"
+        , Html.Attributes.style "border-collapse" "collapse"
+        ]
+        [ Html.thead []
+            [ Html.tr []
+                [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Name" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Description" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Version" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Steps" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Actions" ]
                 ]
             ]
-        , tbody =
-            List.map viewProcedureRow procedures
-        }
+        , Html.tbody []
+            (List.map viewProcedureRow procedures)
+        ]
 
 
-viewProcedureRow : TestProcedure -> DataTable.Row Msg
+viewProcedureRow : TestProcedure -> Html Msg
 viewProcedureRow procedure =
-    DataTable.row []
-        [ DataTable.cell [] [ Html.text procedure.name ]
-        , DataTable.cell [] [ Html.text procedure.description ]
-        , DataTable.cell []
+    Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
+        [ Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text procedure.name ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text procedure.description ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ]
             [ Html.text
                 ("v"
                     ++ String.fromInt procedure.version
@@ -451,20 +436,31 @@ viewProcedureRow procedure =
                        )
                 )
             ]
-        , DataTable.cell [] [ Html.text (String.fromInt (List.length procedure.steps)) ]
-        , DataTable.cell []
-            [ Button.text
-                (Button.config |> Button.setOnClick (Just (SelectProcedure procedure)))
-                "View"
-            , Button.text
-                (Button.config |> Button.setOnClick (Just (OpenEditDialog procedure)))
-                "Edit"
-            , Button.text
-                (Button.config |> Button.setOnClick (Just (CreateVersion procedure.id)))
-                "New Version"
-            , Button.text
-                (Button.config |> Button.setOnClick (Just (OpenVersionsDialog procedure)))
-                "History"
+        , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (String.fromInt (List.length procedure.steps)) ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ]
+            [ Html.button
+                [ Html.Events.onClick (SelectProcedure procedure)
+                , Html.Attributes.class "mdc-button"
+                , Html.Attributes.style "margin-right" "8px"
+                ]
+                [ Html.text "View" ]
+            , Html.button
+                [ Html.Events.onClick (OpenEditDialog procedure)
+                , Html.Attributes.class "mdc-button"
+                , Html.Attributes.style "margin-right" "8px"
+                ]
+                [ Html.text "Edit" ]
+            , Html.button
+                [ Html.Events.onClick (CreateVersion procedure.id)
+                , Html.Attributes.class "mdc-button"
+                , Html.Attributes.style "margin-right" "8px"
+                ]
+                [ Html.text "New Version" ]
+            , Html.button
+                [ Html.Events.onClick (OpenVersionsDialog procedure)
+                , Html.Attributes.class "mdc-button"
+                ]
+                [ Html.text "History" ]
             ]
         ]
 
@@ -491,18 +487,12 @@ viewPagination model =
         , Html.Attributes.style "gap" "10px"
         , Html.Attributes.style "margin-top" "20px"
         ]
-        [ Button.text
-            (Button.config
-                |> Button.setOnClick
-                    (if hasPrev then
-                        Just (LoadPage ((currentPage - 1) * model.limit))
-
-                     else
-                        Nothing
-                    )
-                |> Button.setDisabled (not hasPrev)
-            )
-            "Previous"
+        [ Html.button
+            [ Html.Events.onClick (LoadPage ((currentPage - 1) * model.limit))
+            , Html.Attributes.disabled (not hasPrev)
+            , Html.Attributes.class "mdc-button"
+            ]
+            [ Html.text "Previous" ]
         , Html.span []
             [ Html.text
                 ("Page "
@@ -511,162 +501,172 @@ viewPagination model =
                     ++ String.fromInt (max 1 totalPages)
                 )
             ]
-        , Button.text
-            (Button.config
-                |> Button.setOnClick
-                    (if hasNext then
-                        Just (LoadPage ((currentPage + 1) * model.limit))
-
-                     else
-                        Nothing
-                    )
-                |> Button.setDisabled (not hasNext)
-            )
-            "Next"
+        , Html.button
+            [ Html.Events.onClick (LoadPage ((currentPage + 1) * model.limit))
+            , Html.Attributes.disabled (not hasNext)
+            , Html.Attributes.class "mdc-button"
+            ]
+            [ Html.text "Next" ]
         ]
 
 
 viewCreateDialog : CreateDialogState -> Html Msg
 viewCreateDialog dialog =
-    Dialog.dialog
-        (Dialog.config
-            |> Dialog.setOpen True
-            |> Dialog.setOnClose CloseCreateDialog
-        )
-        { title = Just "Create Test Procedure"
-        , content =
-            [ Html.div []
-                [ TextField.filled
-                    (TextField.config
-                        |> TextField.setLabel (Just "Name")
-                        |> TextField.setValue (Just dialog.name)
-                        |> TextField.setOnInput (Just SetCreateName)
-                        |> TextField.setRequired True
-                    )
-                , TextField.filled
-                    (TextField.config
-                        |> TextField.setLabel (Just "Description")
-                        |> TextField.setValue (Just dialog.description)
-                        |> TextField.setOnInput (Just SetCreateDescription)
-                        |> TextField.setRequired True
-                    )
-                , TextField.filled
-                    (TextField.config
-                        |> TextField.setLabel (Just "Steps (JSON)")
-                        |> TextField.setValue (Just dialog.stepsJson)
-                        |> TextField.setOnInput (Just SetCreateStepsJson)
-                        |> TextField.setRequired True
-                    )
+    viewDialogOverlay "Create Test Procedure"
+        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Name" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value dialog.name
+                , Html.Events.onInput SetCreateName
+                , Html.Attributes.required True
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "padding" "8px"
                 ]
+                []
             ]
-        , actions =
-            [ Button.text
-                (Button.config |> Button.setOnClick (Just CloseCreateDialog))
-                "Cancel"
-            , Button.raised
-                (Button.config |> Button.setOnClick (Just SubmitCreate))
-                "Create"
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Description" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value dialog.description
+                , Html.Events.onInput SetCreateDescription
+                , Html.Attributes.required True
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "padding" "8px"
+                ]
+                []
             ]
-        }
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Steps (JSON)" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value dialog.stepsJson
+                , Html.Events.onInput SetCreateStepsJson
+                , Html.Attributes.required True
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "padding" "8px"
+                ]
+                []
+            ]
+        ]
+        [ Html.button
+            [ Html.Events.onClick CloseCreateDialog
+            , Html.Attributes.class "mdc-button"
+            ]
+            [ Html.text "Cancel" ]
+        , Html.button
+            [ Html.Events.onClick SubmitCreate
+            , Html.Attributes.class "mdc-button mdc-button--raised"
+            ]
+            [ Html.text "Create" ]
+        ]
 
 
 viewEditDialog : EditDialogState -> Html Msg
 viewEditDialog dialog =
-    Dialog.dialog
-        (Dialog.config
-            |> Dialog.setOpen True
-            |> Dialog.setOnClose CloseEditDialog
-        )
-        { title = Just "Edit Test Procedure"
-        , content =
-            [ Html.div []
-                [ TextField.filled
-                    (TextField.config
-                        |> TextField.setLabel (Just "Name")
-                        |> TextField.setValue (Just dialog.name)
-                        |> TextField.setOnInput (Just SetEditName)
-                        |> TextField.setRequired True
-                    )
-                , TextField.filled
-                    (TextField.config
-                        |> TextField.setLabel (Just "Description")
-                        |> TextField.setValue (Just dialog.description)
-                        |> TextField.setOnInput (Just SetEditDescription)
-                        |> TextField.setRequired True
-                    )
-                , TextField.filled
-                    (TextField.config
-                        |> TextField.setLabel (Just "Steps (JSON)")
-                        |> TextField.setValue (Just dialog.stepsJson)
-                        |> TextField.setOnInput (Just SetEditStepsJson)
-                        |> TextField.setRequired True
-                    )
+    viewDialogOverlay "Edit Test Procedure"
+        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Name" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value dialog.name
+                , Html.Events.onInput SetEditName
+                , Html.Attributes.required True
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "padding" "8px"
                 ]
+                []
             ]
-        , actions =
-            [ Button.text
-                (Button.config |> Button.setOnClick (Just CloseEditDialog))
-                "Cancel"
-            , Button.raised
-                (Button.config |> Button.setOnClick (Just SubmitEdit))
-                "Save"
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Description" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value dialog.description
+                , Html.Events.onInput SetEditDescription
+                , Html.Attributes.required True
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "padding" "8px"
+                ]
+                []
             ]
-        }
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Steps (JSON)" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value dialog.stepsJson
+                , Html.Events.onInput SetEditStepsJson
+                , Html.Attributes.required True
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "padding" "8px"
+                ]
+                []
+            ]
+        ]
+        [ Html.button
+            [ Html.Events.onClick CloseEditDialog
+            , Html.Attributes.class "mdc-button"
+            ]
+            [ Html.text "Cancel" ]
+        , Html.button
+            [ Html.Events.onClick SubmitEdit
+            , Html.Attributes.class "mdc-button mdc-button--raised"
+            ]
+            [ Html.text "Save" ]
+        ]
 
 
 viewVersionsDialog : VersionsDialogState -> Html Msg
 viewVersionsDialog dialog =
-    Dialog.dialog
-        (Dialog.config
-            |> Dialog.setOpen True
-            |> Dialog.setOnClose CloseVersionsDialog
-        )
-        { title = Just ("Version History: " ++ dialog.procedure.name)
-        , content =
-            [ Html.div []
-                [ if List.isEmpty dialog.versions then
-                    Html.text "Loading versions..."
+    viewDialogOverlay ("Version History: " ++ dialog.procedure.name)
+        [ Html.div []
+            [ if List.isEmpty dialog.versions then
+                Html.text "Loading versions..."
 
-                  else
-                    DataTable.dataTable
-                        (DataTable.config)
-                        { thead =
-                            [ DataTable.row []
-                                [ DataTable.cell [] [ Html.text "Version" ]
-                                , DataTable.cell [] [ Html.text "Created" ]
-                                , DataTable.cell [] [ Html.text "Steps" ]
-                                ]
+              else
+                Html.table
+                    [ Html.Attributes.class "mdc-data-table__table"
+                    , Html.Attributes.style "width" "100%"
+                    , Html.Attributes.style "border-collapse" "collapse"
+                    ]
+                    [ Html.thead []
+                        [ Html.tr []
+                            [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Version" ]
+                            , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Created" ]
+                            , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Steps" ]
                             ]
-                        , tbody =
-                            List.map
-                                (\v ->
-                                    DataTable.row []
-                                        [ DataTable.cell []
-                                            [ Html.text
-                                                ("v"
-                                                    ++ String.fromInt v.version
-                                                    ++ (if v.isLatest then
-                                                            " (latest)"
+                        ]
+                    , Html.tbody []
+                        (List.map
+                            (\v ->
+                                Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
+                                    [ Html.td [ Html.Attributes.style "padding" "12px" ]
+                                        [ Html.text
+                                            ("v"
+                                                ++ String.fromInt v.version
+                                                ++ (if v.isLatest then
+                                                        " (latest)"
 
-                                                        else
-                                                            ""
-                                                       )
-                                                )
-                                            ]
-                                        , DataTable.cell [] [ Html.text (formatTime v.createdAt) ]
-                                        , DataTable.cell [] [ Html.text (String.fromInt (List.length v.steps)) ]
+                                                    else
+                                                        ""
+                                                   )
+                                            )
                                         ]
-                                )
-                                dialog.versions
-                        }
-                ]
+                                    , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (formatTime v.createdAt) ]
+                                    , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (String.fromInt (List.length v.steps)) ]
+                                    ]
+                            )
+                            dialog.versions
+                        )
+                    ]
             ]
-        , actions =
-            [ Button.text
-                (Button.config |> Button.setOnClick (Just CloseVersionsDialog))
-                "Close"
+        ]
+        [ Html.button
+            [ Html.Events.onClick CloseVersionsDialog
+            , Html.Attributes.class "mdc-button"
             ]
-        }
+            [ Html.text "Close" ]
+        ]
 
 
 
@@ -750,3 +750,36 @@ monthToInt month =
 stepsToJson : List TestStep -> String
 stepsToJson steps =
     "[]"
+
+
+viewDialogOverlay : String -> List (Html Msg) -> List (Html Msg) -> Html Msg
+viewDialogOverlay title content actions =
+    Html.div
+        [ Html.Attributes.style "position" "fixed"
+        , Html.Attributes.style "top" "0"
+        , Html.Attributes.style "left" "0"
+        , Html.Attributes.style "width" "100%"
+        , Html.Attributes.style "height" "100%"
+        , Html.Attributes.style "background-color" "rgba(0,0,0,0.5)"
+        , Html.Attributes.style "display" "flex"
+        , Html.Attributes.style "justify-content" "center"
+        , Html.Attributes.style "align-items" "center"
+        , Html.Attributes.style "z-index" "1000"
+        ]
+        [ Html.div
+            [ Html.Attributes.class "mdc-dialog__surface"
+            , Html.Attributes.style "background" "white"
+            , Html.Attributes.style "padding" "24px"
+            , Html.Attributes.style "border-radius" "4px"
+            , Html.Attributes.style "min-width" "400px"
+            ]
+            [ Html.h2 [ Html.Attributes.class "mdc-typography--headline6" ] [ Html.text title ]
+            , Html.div [ Html.Attributes.style "margin" "20px 0" ] content
+            , Html.div
+                [ Html.Attributes.style "display" "flex"
+                , Html.Attributes.style "justify-content" "flex-end"
+                , Html.Attributes.style "gap" "8px"
+                ]
+                actions
+            ]
+        ]

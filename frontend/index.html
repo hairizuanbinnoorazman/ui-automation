@@ -1,79 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE HTML>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UI Automation</title>
+  <meta charset="UTF-8">
+  <title>UI Automation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Material Components Web CSS -->
-    <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
+  <!-- Material Design CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css">
 
-    <!-- Material Icons -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-
-    <!-- Roboto Font -->
-    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500" rel="stylesheet">
-
-    <style>
-        body {
-            margin: 0;
-            font-family: Roboto, sans-serif;
-        }
-
-        .mdc-drawer-app-content {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-
-        .mdc-text-field {
-            width: 100%;
-            margin: 10px 0;
-        }
-
-        .mdc-button {
-            margin: 10px 5px;
-        }
-
-        .mdc-dialog .mdc-dialog__surface {
-            max-width: 600px;
-        }
-
-        .mdc-card {
-            margin: 10px 0;
-        }
-
-        .mdc-data-table {
-            width: 100%;
-        }
-
-        .mdc-drawer {
-            position: relative;
-        }
-
-        .mdc-layout-grid {
-            padding: 0;
-        }
-    </style>
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+      font-family: Roboto, sans-serif;
+    }
+  </style>
 </head>
+
 <body>
-    <div id="app"></div>
+  <div id="elm"></div>
 
-    <!-- Material Components Web JavaScript -->
-    <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
+  <!-- Load the compiled Elm application -->
+  <script src="elm.js"></script>
 
-    <!-- Elm Application -->
-    <script src="elm.js"></script>
-    <script>
-        var app = Elm.App.init({
-            node: document.getElementById('app')
-        });
+  <script>
+    try {
+      var app = Elm.App.init({
+        node: document.getElementById("elm")
+      });
+    }
+    catch (e) {
+      // Display initialization errors
+      var header = document.createElement("h1");
+      header.style.fontFamily = "monospace";
+      header.style.color = "red";
+      header.innerText = "Initialization Error";
+      var pre = document.createElement("pre");
+      pre.innerText = e;
+      pre.style.fontFamily = "monospace";
+      document.body.insertBefore(header, document.body.firstChild);
+      document.body.insertBefore(pre, header.nextSibling);
+      throw e;
+    }
+  </script>
 
-        // Initialize Material Components
-        window.addEventListener('load', function() {
-            // Auto-initialize all Material Components
-            mdc.autoInit();
-        });
-    </script>
+  <!-- Material Design JavaScript (optional, for interactive components) -->
+  <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
 </body>
 </html>

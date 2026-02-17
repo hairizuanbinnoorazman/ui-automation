@@ -4,10 +4,7 @@ import Browser
 import Browser.Navigation as Nav
 import Html exposing (Html)
 import Html.Attributes
-import Material.Drawer as Drawer
-import Material.List as List
-import Material.TopAppBar as TopAppBar
-import Material.Typography as Typography
+import Html.Events
 import Pages.Login as Login
 import Pages.Projects as Projects
 import Pages.TestProcedures as TestProcedures
@@ -268,67 +265,81 @@ view model =
 
 viewTopAppBar : Model -> Html Msg
 viewTopAppBar model =
-    TopAppBar.regular
-        (TopAppBar.config |> TopAppBar.setAttributes [ Typography.typography ])
-        [ TopAppBar.row []
-            [ TopAppBar.section
-                [ TopAppBar.alignStart ]
-                [ if model.user /= Nothing then
-                    TopAppBar.navigationIcon
-                        (TopAppBar.iconButton
-                            (TopAppBar.iconButtonConfig
-                                |> TopAppBar.iconButtonSetOnClick ToggleDrawer
-                            )
-                        )
-                        "menu"
-
-                  else
-                    Html.text ""
-                , TopAppBar.title [] [ Html.text "UI Automation" ]
-                ]
-            , TopAppBar.section
-                [ TopAppBar.alignEnd ]
-                [ case model.user of
-                    Just user ->
-                        Html.div []
-                            [ Html.span
-                                [ Html.Attributes.style "margin-right" "20px" ]
-                                [ Html.text user.username ]
-                            , TopAppBar.actionItem
-                                (TopAppBar.iconButton
-                                    (TopAppBar.iconButtonConfig
-                                        |> TopAppBar.iconButtonSetOnClick Logout
-                                    )
-                                )
-                                "logout"
-                            ]
-
-                    Nothing ->
-                        Html.text ""
-                ]
+    Html.header
+        [ Html.Attributes.class "mdc-top-app-bar"
+        , Html.Attributes.style "background" "#6200ee"
+        , Html.Attributes.style "color" "white"
+        , Html.Attributes.style "padding" "16px"
+        , Html.Attributes.style "display" "flex"
+        , Html.Attributes.style "justify-content" "space-between"
+        , Html.Attributes.style "align-items" "center"
+        ]
+        [ Html.div
+            [ Html.Attributes.style "display" "flex"
+            , Html.Attributes.style "align-items" "center"
+            , Html.Attributes.style "gap" "16px"
             ]
+            [ if model.user /= Nothing then
+                Html.button
+                    [ Html.Events.onClick ToggleDrawer
+                    , Html.Attributes.class "mdc-icon-button"
+                    , Html.Attributes.style "color" "white"
+                    , Html.Attributes.style "background" "none"
+                    , Html.Attributes.style "border" "none"
+                    , Html.Attributes.style "cursor" "pointer"
+                    ]
+                    [ Html.text "☰" ]
+
+              else
+                Html.text ""
+            , Html.h1
+                [ Html.Attributes.class "mdc-top-app-bar__title"
+                , Html.Attributes.style "margin" "0"
+                , Html.Attributes.style "font-size" "20px"
+                ]
+                [ Html.text "UI Automation" ]
+            ]
+        , case model.user of
+            Just user ->
+                Html.div
+                    [ Html.Attributes.style "display" "flex"
+                    , Html.Attributes.style "align-items" "center"
+                    , Html.Attributes.style "gap" "16px"
+                    ]
+                    [ Html.span [] [ Html.text user.username ]
+                    , Html.button
+                        [ Html.Events.onClick Logout
+                        , Html.Attributes.class "mdc-icon-button"
+                        , Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background" "none"
+                        , Html.Attributes.style "border" "none"
+                        , Html.Attributes.style "cursor" "pointer"
+                        ]
+                        [ Html.text "⎋" ]
+                    ]
+
+            Nothing ->
+                Html.text ""
         ]
 
 
 viewDrawer : Model -> Html Msg
 viewDrawer model =
-    Drawer.dismissibleDrawer
-        (Drawer.config
-            |> Drawer.setOpen model.drawerOpen
-        )
-        { title = Just "Navigation"
-        , content =
-            [ List.list
-                List.config
-                [ List.listItem
-                    (List.listItemConfig
-                        |> List.listItemSetAttributes
-                            [ Html.Attributes.href "/projects" ]
-                    )
+    Html.div
+        [ Html.Attributes.class "mdc-drawer mdc-drawer--dismissible"
+        , Html.Attributes.classList [ ( "mdc-drawer--open", model.drawerOpen ) ]
+        , Html.Attributes.style "width" "256px"
+        ]
+        [ Html.div [ Html.Attributes.class "mdc-drawer__content" ]
+            [ Html.nav [ Html.Attributes.class "mdc-list" ]
+                [ Html.a
+                    [ Html.Attributes.href "/projects"
+                    , Html.Attributes.class "mdc-list-item"
+                    ]
                     [ Html.text "Projects" ]
                 ]
             ]
-        }
+        ]
 
 
 viewContent : Model -> Html Msg

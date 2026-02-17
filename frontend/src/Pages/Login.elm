@@ -2,12 +2,9 @@ module Pages.Login exposing (Model, Msg, init, update, view)
 
 import API
 import Html exposing (Html)
+import Html.Attributes
+import Html.Events
 import Http
-import Material.Button as Button
-import Material.Card as Card
-import Material.LayoutGrid as LayoutGrid
-import Material.TextField as TextField
-import Material.Typography as Typography
 import Types exposing (LoginCredentials, RegisterCredentials, User)
 
 
@@ -152,154 +149,176 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    LayoutGrid.layoutGrid []
-        [ LayoutGrid.cell
-            [ LayoutGrid.span4Desktop
-            , LayoutGrid.span4Tablet
-            , LayoutGrid.span4Phone
-            , LayoutGrid.align LayoutGrid.Middle
+    Html.div
+        [ Html.Attributes.style "display" "flex"
+        , Html.Attributes.style "justify-content" "center"
+        , Html.Attributes.style "align-items" "center"
+        , Html.Attributes.style "min-height" "100vh"
+        ]
+        [ Html.div
+            [ Html.Attributes.class "mdc-card"
+            , Html.Attributes.style "padding" "24px"
+            , Html.Attributes.style "max-width" "400px"
             ]
-            []
-        , LayoutGrid.cell
-            [ LayoutGrid.span4Desktop
-            , LayoutGrid.span4Tablet
-            , LayoutGrid.span4Phone
-            , LayoutGrid.align LayoutGrid.Middle
-            ]
-            [ Card.card
-                (Card.config |> Card.setAttributes [ Typography.typography ])
-                { blocks =
-                    [ Card.block <|
-                        Html.div []
-                            [ Html.h2
-                                [ Typography.headline4 ]
-                                [ Html.text
-                                    (if model.mode == LoginMode then
-                                        "Login"
+            [ Html.h2
+                [ Html.Attributes.class "mdc-typography--headline4" ]
+                [ Html.text
+                    (if model.mode == LoginMode then
+                        "Login"
 
-                                     else
-                                        "Register"
-                                    )
-                                ]
-                            , case model.error of
-                                Just err ->
-                                    Html.div
-                                        [ Typography.body1
-                                        ]
-                                        [ Html.text err ]
+                     else
+                        "Register"
+                    )
+                ]
+            , case model.error of
+                Just err ->
+                    Html.div
+                        [ Html.Attributes.class "mdc-typography--body1"
+                        , Html.Attributes.style "color" "red"
+                        , Html.Attributes.style "margin-bottom" "16px"
+                        ]
+                        [ Html.text err ]
 
-                                Nothing ->
-                                    Html.text ""
-                            , if model.mode == LoginMode then
-                                viewLoginForm model
+                Nothing ->
+                    Html.text ""
+            , if model.mode == LoginMode then
+                viewLoginForm model
 
-                              else
-                                viewRegisterForm model
-                            , Html.div []
-                                [ Html.button
-                                    []
-                                    [ Html.text
-                                        (if model.mode == LoginMode then
-                                            "Need an account? Register"
+              else
+                viewRegisterForm model
+            , Html.div [ Html.Attributes.style "margin-top" "16px" ]
+                [ Html.button
+                    [ Html.Events.onClick
+                        (SetMode
+                            (if model.mode == LoginMode then
+                                RegisterMode
 
-                                         else
-                                            "Have an account? Login"
-                                        )
-                                    ]
-                                ]
-                            ]
+                             else
+                                LoginMode
+                            )
+                        )
+                    , Html.Attributes.class "mdc-button"
                     ]
-                , actions = Nothing
-                }
+                    [ Html.text
+                        (if model.mode == LoginMode then
+                            "Need an account? Register"
+
+                         else
+                            "Have an account? Login"
+                        )
+                    ]
+                ]
             ]
-        , LayoutGrid.cell
-            [ LayoutGrid.span4Desktop
-            , LayoutGrid.span4Tablet
-            , LayoutGrid.span4Phone
-            , LayoutGrid.align LayoutGrid.Middle
-            ]
-            []
         ]
 
 
 viewLoginForm : Model -> Html Msg
 viewLoginForm model =
     Html.div []
-        [ TextField.filled
-            (TextField.config
-                |> TextField.setLabel (Just "Email")
-                |> TextField.setValue (Just model.email)
-                |> TextField.setOnInput (Just SetEmail)
-                |> TextField.setType (Just "email")
-                |> TextField.setRequired True
-            )
-        , TextField.filled
-            (TextField.config
-                |> TextField.setLabel (Just "Password")
-                |> TextField.setValue (Just model.password)
-                |> TextField.setOnInput (Just SetPassword)
-                |> TextField.setType (Just "password")
-                |> TextField.setRequired True
-            )
-        , Button.raised
-            (Button.config
-                |> Button.setOnClick (Just SubmitLogin)
-                |> Button.setDisabled model.loading
-            )
-            (if model.loading then
-                "Logging in..."
+        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Email" ]
+            , Html.input
+                [ Html.Attributes.type_ "email"
+                , Html.Attributes.value model.email
+                , Html.Events.onInput SetEmail
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Password" ]
+            , Html.input
+                [ Html.Attributes.type_ "password"
+                , Html.Attributes.value model.password
+                , Html.Events.onInput SetPassword
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.button
+            [ Html.Events.onClick SubmitLogin
+            , Html.Attributes.disabled model.loading
+            , Html.Attributes.class "mdc-button mdc-button--raised"
+            ]
+            [ Html.text
+                (if model.loading then
+                    "Logging in..."
 
-             else
-                "Login"
-            )
+                 else
+                    "Login"
+                )
+            ]
         ]
 
 
 viewRegisterForm : Model -> Html Msg
 viewRegisterForm model =
     Html.div []
-        [ TextField.filled
-            (TextField.config
-                |> TextField.setLabel (Just "Email")
-                |> TextField.setValue (Just model.email)
-                |> TextField.setOnInput (Just SetEmail)
-                |> TextField.setType (Just "email")
-                |> TextField.setRequired True
-            )
-        , TextField.filled
-            (TextField.config
-                |> TextField.setLabel (Just "Username")
-                |> TextField.setValue (Just model.username)
-                |> TextField.setOnInput (Just SetUsername)
-                |> TextField.setRequired True
-            )
-        , TextField.filled
-            (TextField.config
-                |> TextField.setLabel (Just "Password")
-                |> TextField.setValue (Just model.password)
-                |> TextField.setOnInput (Just SetPassword)
-                |> TextField.setType (Just "password")
-                |> TextField.setRequired True
-            )
-        , TextField.filled
-            (TextField.config
-                |> TextField.setLabel (Just "Confirm Password")
-                |> TextField.setValue (Just model.confirmPassword)
-                |> TextField.setOnInput (Just SetConfirmPassword)
-                |> TextField.setType (Just "password")
-                |> TextField.setRequired True
-            )
-        , Button.raised
-            (Button.config
-                |> Button.setOnClick (Just SubmitRegister)
-                |> Button.setDisabled model.loading
-            )
-            (if model.loading then
-                "Registering..."
+        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Email" ]
+            , Html.input
+                [ Html.Attributes.type_ "email"
+                , Html.Attributes.value model.email
+                , Html.Events.onInput SetEmail
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Username" ]
+            , Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value model.username
+                , Html.Events.onInput SetUsername
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Password" ]
+            , Html.input
+                [ Html.Attributes.type_ "password"
+                , Html.Attributes.value model.password
+                , Html.Events.onInput SetPassword
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
+            [ Html.label [] [ Html.text "Confirm Password" ]
+            , Html.input
+                [ Html.Attributes.type_ "password"
+                , Html.Attributes.value model.confirmPassword
+                , Html.Events.onInput SetConfirmPassword
+                , Html.Attributes.required True
+                , Html.Attributes.class "mdc-text-field__input"
+                , Html.Attributes.style "width" "100%"
+                ]
+                []
+            ]
+        , Html.button
+            [ Html.Events.onClick SubmitRegister
+            , Html.Attributes.disabled model.loading
+            , Html.Attributes.class "mdc-button mdc-button--raised"
+            ]
+            [ Html.text
+                (if model.loading then
+                    "Registering..."
 
-             else
-                "Register"
-            )
+                 else
+                    "Register"
+                )
+            ]
         ]
 
 
