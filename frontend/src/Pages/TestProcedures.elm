@@ -1,6 +1,7 @@
 module Pages.TestProcedures exposing (Model, Msg, init, update, view)
 
 import API
+import Components
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -509,42 +510,24 @@ viewPagination model =
 
 viewCreateDialog : CreateDialogState -> Html Msg
 viewCreateDialog dialog =
-    viewDialogOverlay "Create Test Procedure"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Name" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.name
-                , Html.Events.onInput SetCreateName
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+    Components.viewDialogOverlay "Create Test Procedure"
+        [ Components.viewFormField "Name"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.name
+            , Html.Events.onInput SetCreateName
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Description" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.description
-                , Html.Events.onInput SetCreateDescription
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Description"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.description
+            , Html.Events.onInput SetCreateDescription
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Steps (JSON)" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.stepsJson
-                , Html.Events.onInput SetCreateStepsJson
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Steps (JSON)"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.stepsJson
+            , Html.Events.onInput SetCreateStepsJson
+            , Html.Attributes.required True
             ]
         ]
         [ Html.button
@@ -562,42 +545,24 @@ viewCreateDialog dialog =
 
 viewEditDialog : EditDialogState -> Html Msg
 viewEditDialog dialog =
-    viewDialogOverlay "Edit Test Procedure"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Name" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.name
-                , Html.Events.onInput SetEditName
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+    Components.viewDialogOverlay "Edit Test Procedure"
+        [ Components.viewFormField "Name"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.name
+            , Html.Events.onInput SetEditName
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Description" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.description
-                , Html.Events.onInput SetEditDescription
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Description"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.description
+            , Html.Events.onInput SetEditDescription
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Steps (JSON)" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.stepsJson
-                , Html.Events.onInput SetEditStepsJson
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Steps (JSON)"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.stepsJson
+            , Html.Events.onInput SetEditStepsJson
+            , Html.Attributes.required True
             ]
         ]
         [ Html.button
@@ -615,7 +580,7 @@ viewEditDialog dialog =
 
 viewVersionsDialog : VersionsDialogState -> Html Msg
 viewVersionsDialog dialog =
-    viewDialogOverlay ("Version History: " ++ dialog.procedure.name)
+    Components.viewDialogOverlay ("Version History: " ++ dialog.procedure.name)
         [ Html.div []
             [ if List.isEmpty dialog.versions then
                 Html.text "Loading versions..."
@@ -747,36 +712,3 @@ monthToInt month =
 stepsToJson : List TestStep -> String
 stepsToJson steps =
     "[]"
-
-
-viewDialogOverlay : String -> List (Html Msg) -> List (Html Msg) -> Html Msg
-viewDialogOverlay title content actions =
-    Html.div
-        [ Html.Attributes.style "position" "fixed"
-        , Html.Attributes.style "top" "0"
-        , Html.Attributes.style "left" "0"
-        , Html.Attributes.style "width" "100%"
-        , Html.Attributes.style "height" "100%"
-        , Html.Attributes.style "background-color" "rgba(0,0,0,0.5)"
-        , Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "justify-content" "center"
-        , Html.Attributes.style "align-items" "center"
-        , Html.Attributes.style "z-index" "1000"
-        ]
-        [ Html.div
-            [ Html.Attributes.class "mdc-dialog__surface"
-            , Html.Attributes.style "background" "white"
-            , Html.Attributes.style "padding" "24px"
-            , Html.Attributes.style "border-radius" "4px"
-            , Html.Attributes.style "min-width" "400px"
-            ]
-            [ Html.h2 [ Html.Attributes.class "mdc-typography--headline6" ] [ Html.text title ]
-            , Html.div [ Html.Attributes.style "margin" "20px 0" ] content
-            , Html.div
-                [ Html.Attributes.style "display" "flex"
-                , Html.Attributes.style "justify-content" "flex-end"
-                , Html.Attributes.style "gap" "8px"
-                ]
-                actions
-            ]
-        ]
