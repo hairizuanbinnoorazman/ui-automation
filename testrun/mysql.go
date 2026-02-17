@@ -126,6 +126,25 @@ func (s *MySQLStore) ListByTestProcedure(ctx context.Context, testProcedureID uu
 	return testRuns, nil
 }
 
+// CountByTestProcedure returns the total count of test runs for a specific test procedure.
+func (s *MySQLStore) CountByTestProcedure(ctx context.Context, testProcedureID uuid.UUID) (int, error) {
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&TestRun{}).
+		Where("test_procedure_id = ?", testProcedureID).
+		Count(&count).Error
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to count test runs by test procedure", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": testProcedureID.String(),
+		})
+		return 0, err
+	}
+
+	return int(count), nil
+}
+
 // Start marks a test run as started (sets started_at, changes status to running).
 func (s *MySQLStore) Start(ctx context.Context, id uuid.UUID) error {
 	// Fetch the test run

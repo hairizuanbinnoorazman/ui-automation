@@ -110,6 +110,17 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get total count of test procedures
+	total, err := h.testProcedureStore.CountByProject(r.Context(), projectID)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to count test procedures", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": projectID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to count test procedures")
+		return
+	}
+
 	// List test procedures
 	procedures, err := h.testProcedureStore.ListByProject(r.Context(), projectID, limit, offset)
 	if err != nil {
@@ -121,7 +132,7 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, NewPaginatedResponse(procedures, len(procedures), limit, offset))
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(procedures, total, limit, offset))
 }
 
 // GetByID handles getting a single test procedure by ID.

@@ -122,6 +122,17 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get total count of test runs
+	total, err := h.testRunStore.CountByTestProcedure(r.Context(), procedureID)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to count test runs", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to count test runs")
+		return
+	}
+
 	// List test runs
 	runs, err := h.testRunStore.ListByTestProcedure(r.Context(), procedureID, limit, offset)
 	if err != nil {
@@ -133,7 +144,7 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, NewPaginatedResponse(runs, len(runs), limit, offset))
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(runs, total, limit, offset))
 }
 
 // GetByID handles getting a single test run by ID.

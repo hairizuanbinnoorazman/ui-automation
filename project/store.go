@@ -22,6 +22,9 @@ type Store interface {
 
 	// ListByOwner retrieves a paginated list of active projects for a specific owner.
 	ListByOwner(ctx context.Context, ownerID uuid.UUID, limit, offset int) ([]*Project, error)
+
+	// CountByOwner returns the total count of active projects for a specific owner.
+	CountByOwner(ctx context.Context, ownerID uuid.UUID) (int, error)
 }
 
 // UpdateSetter is a function that updates a project field.

@@ -102,6 +102,17 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Get total count of projects
+	total, err := h.projectStore.CountByOwner(r.Context(), userID)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to count projects", map[string]interface{}{
+			"error":   err.Error(),
+			"user_id": userID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to count projects")
+		return
+	}
+
 	// List projects for user
 	projects, err := h.projectStore.ListByOwner(r.Context(), userID, limit, offset)
 	if err != nil {
@@ -113,7 +124,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, NewPaginatedResponse(projects, len(projects), limit, offset))
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(projects, total, limit, offset))
 }
 
 // GetByID handles getting a single project by ID.
