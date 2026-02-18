@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"archive/zip"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -566,9 +565,13 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 	// Fetch test procedure
 	proc, err := h.testProcedureStore.GetByID(ctx, tr.TestProcedureID)
 	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return
+		}
 		h.logger.Error(ctx, "failed to get test procedure", map[string]interface{}{
-			"error":                err.Error(),
-			"test_procedure_id":    tr.TestProcedureID,
+			"error":             err.Error(),
+			"test_procedure_id": tr.TestProcedureID,
 		})
 		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
 		return
@@ -598,11 +601,12 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&md, "---\n\n")
 
 	for i, asset := range assets {
+		assetEntry := fmt.Sprintf("%s_%s", asset.ID.String(), asset.FileName)
 		fmt.Fprintf(&md, "## Step %d\n\n", i+1)
 		if asset.AssetType == testrun.AssetTypeImage {
-			fmt.Fprintf(&md, "![Step %d](./assets/%s)\n\n", i+1, asset.FileName)
+			fmt.Fprintf(&md, "![Step %d](./assets/%s)\n\n", i+1, assetEntry)
 		} else {
-			fmt.Fprintf(&md, "[%s](./assets/%s)\n\n", asset.FileName, asset.FileName)
+			fmt.Fprintf(&md, "[%s](./assets/%s)\n\n", asset.FileName, assetEntry)
 		}
 		if asset.Description != "" {
 			fmt.Fprintf(&md, "%s\n\n", asset.Description)
@@ -610,20 +614,19 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(&md, "---\n\n")
 	}
 
-	// Build ZIP archive in memory
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+	// Stream ZIP archive directly to the response writer
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "guide-"+id.String()+".zip"))
+	zw := zip.NewWriter(w)
 
 	// Write guide.md
 	guideWriter, err := zw.Create("guide.md")
 	if err != nil {
 		h.logger.Error(ctx, "failed to create guide.md in zip", map[string]interface{}{"error": err.Error()})
-		respondError(w, http.StatusInternalServerError, "failed to generate guide")
 		return
 	}
 	if _, err := io.WriteString(guideWriter, md.String()); err != nil {
 		h.logger.Error(ctx, "failed to write guide.md", map[string]interface{}{"error": err.Error()})
-		respondError(w, http.StatusInternalServerError, "failed to generate guide")
 		return
 	}
 
@@ -635,22 +638,20 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 				"error": err.Error(),
 				"path":  asset.AssetPath,
 			})
-			respondError(w, http.StatusInternalServerError, "failed to download asset")
 			return
 		}
 
-		assetWriter, err := zw.Create("assets/" + asset.FileName)
+		assetEntry := fmt.Sprintf("%s_%s", asset.ID.String(), asset.FileName)
+		assetWriter, err := zw.Create("assets/" + assetEntry)
 		if err != nil {
 			reader.Close()
 			h.logger.Error(ctx, "failed to create asset entry in zip", map[string]interface{}{"error": err.Error()})
-			respondError(w, http.StatusInternalServerError, "failed to generate guide")
 			return
 		}
 
 		if _, err := io.Copy(assetWriter, reader); err != nil {
 			reader.Close()
 			h.logger.Error(ctx, "failed to write asset to zip", map[string]interface{}{"error": err.Error()})
-			respondError(w, http.StatusInternalServerError, "failed to generate guide")
 			return
 		}
 		reader.Close()
@@ -658,16 +659,6 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 
 	if err := zw.Close(); err != nil {
 		h.logger.Error(ctx, "failed to close zip writer", map[string]interface{}{"error": err.Error()})
-		respondError(w, http.StatusInternalServerError, "failed to generate guide")
-		return
-	}
-
-	// Write response
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "guide-"+id.String()+".zip"))
-	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	if _, err := io.Copy(w, &buf); err != nil {
-		h.logger.Error(ctx, "failed to write zip response", map[string]interface{}{"error": err.Error()})
 	}
 }
 
