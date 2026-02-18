@@ -113,6 +113,8 @@ type ListScriptsResponse struct {
 }
 
 // Generate handles generating a new automation script.
+// It creates a DB record with StatusGenerating, returns 202 Accepted immediately,
+// and performs the LLM call and storage upload in a background goroutine.
 func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -149,14 +151,14 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if script already exists
+	// Check if script already exists (including any in-progress generation)
 	existingScript, err := h.scriptStore.GetByProcedureAndFramework(ctx, procedureID, req.Framework)
 	if err == nil {
-		// Script already exists, return it
 		h.logger.Info(ctx, "script already exists, returning existing script", map[string]interface{}{
 			"script_id":         existingScript.ID.String(),
 			"test_procedure_id": procedureID.String(),
 			"framework":         req.Framework,
+			"status":            existingScript.GenerationStatus,
 		})
 		respondJSON(w, http.StatusOK, existingScript)
 		return
@@ -173,24 +175,8 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate script using LLM
-	h.logger.Info(ctx, "generating script", map[string]interface{}{
-		"test_procedure_id": procedureID.String(),
-		"framework":         req.Framework,
-	})
-
-	scriptContent, err := h.generator.Generate(ctx, procedure, req.Framework)
-	if err != nil {
-		h.logger.Error(ctx, "failed to generate script", map[string]interface{}{
-			"error":             err.Error(),
-			"test_procedure_id": procedureID.String(),
-			"framework":         req.Framework,
-		})
-		respondError(w, http.StatusInternalServerError, "failed to generate script")
-		return
-	}
-
-	// Generate filename
+	// Compute filename and storage path upfront — these are deterministic and
+	// do not require the LLM result.
 	sanitizedName := sanitizeProcedureName(procedure.Name)
 	filename := fmt.Sprintf("%s_v%d_%s.py", sanitizedName, procedure.Version, req.Framework)
 	storagePath := fmt.Sprintf("generated-scripts/%s/%s/%s",
@@ -199,54 +185,105 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		filename,
 	)
 
-	// Upload to storage
-	reader := bytes.NewReader(scriptContent)
-	if err := h.storage.Upload(ctx, storagePath, reader); err != nil {
-		h.logger.Error(ctx, "failed to upload script to storage", map[string]interface{}{
-			"error": err.Error(),
-			"path":  storagePath,
-		})
-		respondError(w, http.StatusInternalServerError, "failed to save script")
-		return
-	}
-
-	// Create database record
+	// Create the DB record immediately so the client can track progress.
 	script := &scriptgen.GeneratedScript{
 		TestProcedureID:  procedureID,
 		Framework:        req.Framework,
 		ScriptPath:       storagePath,
 		FileName:         filename,
-		FileSize:         int64(len(scriptContent)),
-		GenerationStatus: scriptgen.StatusCompleted,
+		FileSize:         0,
+		GenerationStatus: scriptgen.StatusGenerating,
 		GeneratedBy:      userID,
 		GeneratedAt:      time.Now(),
 	}
 
 	if err := h.scriptStore.Create(ctx, script); err != nil {
-		// Try to clean up uploaded file
-		if delErr := h.storage.Delete(ctx, storagePath); delErr != nil {
-			h.logger.Warn(ctx, "failed to cleanup uploaded script after db error", map[string]interface{}{
-				"delete_error": delErr.Error(),
-				"path":         storagePath,
-			})
-		}
-
 		h.logger.Error(ctx, "failed to create script record", map[string]interface{}{
 			"error":             err.Error(),
 			"test_procedure_id": procedureID.String(),
 		})
-		respondError(w, http.StatusInternalServerError, "failed to save script record")
+		respondError(w, http.StatusInternalServerError, "failed to create script record")
+		return
+	}
+
+	// Kick off background generation. A detached context is used so the goroutine
+	// is not cancelled when the HTTP request context expires.
+	go h.generateInBackground(context.Background(), script.ID, procedure, req.Framework, storagePath)
+
+	h.logger.Info(ctx, "script generation started", map[string]interface{}{
+		"script_id":         script.ID.String(),
+		"test_procedure_id": procedureID.String(),
+		"framework":         req.Framework,
+	})
+
+	respondJSON(w, http.StatusAccepted, script)
+}
+
+// generateInBackground performs the LLM call, storage upload, and final DB update
+// for an async script generation request. It must be called in a goroutine and
+// must use a context that is not tied to an HTTP request lifetime.
+func (h *ScriptGenHandler) generateInBackground(
+	ctx context.Context,
+	scriptID uuid.UUID,
+	procedure *testprocedure.TestProcedure,
+	framework scriptgen.Framework,
+	storagePath string,
+) {
+	markFailed := func(reason error) {
+		if updateErr := h.scriptStore.Update(ctx, scriptID,
+			scriptgen.SetStatus(scriptgen.StatusFailed),
+			scriptgen.SetErrorMessage(reason.Error()),
+		); updateErr != nil {
+			h.logger.Error(ctx, "failed to mark script as failed", map[string]interface{}{
+				"error":     updateErr.Error(),
+				"script_id": scriptID.String(),
+			})
+		}
+	}
+
+	scriptContent, err := h.generator.Generate(ctx, procedure, framework)
+	if err != nil {
+		h.logger.Error(ctx, "background script generation failed", map[string]interface{}{
+			"error":     err.Error(),
+			"script_id": scriptID.String(),
+		})
+		markFailed(err)
+		return
+	}
+
+	reader := bytes.NewReader(scriptContent)
+	if err := h.storage.Upload(ctx, storagePath, reader); err != nil {
+		h.logger.Error(ctx, "failed to upload script to storage", map[string]interface{}{
+			"error":     err.Error(),
+			"script_id": scriptID.String(),
+			"path":      storagePath,
+		})
+		markFailed(err)
+		return
+	}
+
+	if err := h.scriptStore.Update(ctx, scriptID,
+		scriptgen.SetStatus(scriptgen.StatusCompleted),
+		scriptgen.SetScriptPath(storagePath, int64(len(scriptContent))),
+	); err != nil {
+		h.logger.Error(ctx, "failed to mark script as completed", map[string]interface{}{
+			"error":     err.Error(),
+			"script_id": scriptID.String(),
+		})
+		// Best-effort cleanup so the orphaned file does not linger.
+		if delErr := h.storage.Delete(ctx, storagePath); delErr != nil {
+			h.logger.Warn(ctx, "failed to cleanup script after db update error", map[string]interface{}{
+				"delete_error": delErr.Error(),
+				"path":         storagePath,
+			})
+		}
 		return
 	}
 
 	h.logger.Info(ctx, "script generated successfully", map[string]interface{}{
-		"script_id":         script.ID.String(),
-		"test_procedure_id": procedureID.String(),
-		"framework":         req.Framework,
-		"file_size":         script.FileSize,
+		"script_id": scriptID.String(),
+		"file_size": len(scriptContent),
 	})
-
-	respondJSON(w, http.StatusCreated, script)
 }
 
 // List handles listing all scripts for a test procedure.
