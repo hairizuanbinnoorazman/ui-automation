@@ -197,6 +197,55 @@ Handlers in `cmd/backend/handlers/`:
 
 **Handler dependencies**: All handlers depend on Store interfaces, not concrete implementations. Tests can inject mock stores.
 
+## Authorization Requirements
+
+**Every handler that operates on a project-owned resource MUST verify ownership before doing any work.** This is a hard requirement — missing it is a security vulnerability.
+
+### Two middleware layers
+
+1. **`AuthMiddleware`** — applied to all `/api/v1` routes. Validates the session cookie and puts `UserID` into the request context. All protected routes have this.
+
+2. **`ProjectAuthorizationMiddleware`** — applied only to the `projectRouter` subrouter (`/api/v1/projects/{id}`). Checks that the authenticated user owns that project. **This only covers routes registered on `projectRouter`, not on `apiRouter`.**
+
+### Routes registered directly on `apiRouter` do NOT get project auth automatically
+
+Routes like `/procedures/{id}/...` or `/projects/{project_id}/procedures/...` are registered on `apiRouter`, which only carries `AuthMiddleware`. They must enforce ownership themselves inside the handler.
+
+### Pattern: handler-level ownership check for procedure routes
+
+When a handler operates on a test procedure by ID (and is not under `projectRouter`), call `checkProcedureOwnership` before doing any real work:
+
+```go
+func (h *TestProcedureHandler) MyHandler(w http.ResponseWriter, r *http.Request) {
+    id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+    if !ok {
+        return
+    }
+
+    // REQUIRED: verify the caller owns the project this procedure belongs to
+    if !h.checkProcedureOwnership(w, r, id) {
+        return
+    }
+
+    // ... rest of handler
+}
+```
+
+`checkProcedureOwnership` (`cmd/backend/handlers/testprocedure.go`):
+1. Gets `UserID` from context (returns 401 if missing)
+2. Fetches the procedure to get its `ProjectID` (returns 404 if not found)
+3. Fetches the project to get its `OwnerID` (returns 404 if not found)
+4. Returns 403 if `OwnerID != UserID`
+
+`TestProcedureHandler` must have `projectStore project.Store` injected (see constructor) for this to work.
+
+### Checklist when adding a new route
+
+- [ ] Is the route on `projectRouter`? → ownership is handled by middleware, no extra work needed.
+- [ ] Is the route on `apiRouter` and operates on a procedure? → call `checkProcedureOwnership`.
+- [ ] Is the route on `apiRouter` and operates on a different resource (e.g. test run)? → add an equivalent ownership check tracing back to the owning project.
+- [ ] Never register a state-mutating route (POST/PUT/DELETE) on `apiRouter` without an explicit ownership check in the handler.
+
 ## Adding New Features
 
 ### New Domain Entity
