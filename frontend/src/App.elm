@@ -485,7 +485,6 @@ viewTopAppBar model =
             [ if model.user /= Nothing then
                 Html.button
                     [ Html.Events.onClick ToggleDrawer
-                    , Html.Attributes.class "mdc-icon-button"
                     , Html.Attributes.style "color" "white"
                     , Html.Attributes.style "background" "none"
                     , Html.Attributes.style "border" "none"
