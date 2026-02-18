@@ -183,6 +183,8 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 				respondError(w, http.StatusInternalServerError, "failed to cleanup stale script")
 				return
 			}
+			// Mark err as not-found so the check below treats this as a fresh start.
+			err = scriptgen.ErrScriptNotFound
 			// Fall through to create a new record.
 		} else {
 			h.logger.Info(ctx, "script already exists, returning existing script", map[string]interface{}{
@@ -450,6 +452,10 @@ func (h *ScriptGenHandler) Download(w http.ResponseWriter, r *http.Request) {
 	// Download from storage
 	reader, err := h.storage.Download(ctx, script.ScriptPath)
 	if err != nil {
+		if errors.Is(err, storage.ErrFileNotFound) {
+			respondError(w, http.StatusNotFound, "script file not found in storage")
+			return
+		}
 		h.logger.Error(ctx, "failed to download script from storage", map[string]interface{}{
 			"error":     err.Error(),
 			"script_id": scriptID.String(),
@@ -462,7 +468,7 @@ func (h *ScriptGenHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 	// Set response headers
 	w.Header().Set("Content-Type", "text/x-python")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", script.FileName))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", script.FileName))
 
 	// Stream file to response
 	if _, err := io.Copy(w, reader); err != nil {
