@@ -16,18 +16,6 @@ func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework, co
 		config = DefaultValidationConfig()
 	}
 
-	if config == nil {
-		config = DefaultValidationConfig()
-	}
-
-	// Validate using testprocedure package validators
-	limits := testprocedure.ValidationLimits{
-		MaxNameLength:        config.MaxNameLength,
-		MaxDescriptionLength: config.MaxDescriptionLength,
-		MaxStepsJSONLength:   config.MaxStepsJSONLength,
-		MaxStepsCount:        config.MaxStepsCount,
-	}
-
 	// Sanitize all user-provided content
 	sanitizedName := SanitizeTestProcedureName(procedure.Name)
 	sanitizedDescription := SanitizeTestProcedureDescription(procedure.Description)
