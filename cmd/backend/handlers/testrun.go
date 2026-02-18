@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
+	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 	"github.com/hairizuan-noorazman/ui-automation/testrun"
 )
 
@@ -22,19 +25,21 @@ const (
 
 // TestRunHandler handles test run-related requests.
 type TestRunHandler struct {
-	testRunStore testrun.Store
-	assetStore   testrun.AssetStore
-	storage      storage.BlobStorage
-	logger       logger.Logger
+	testRunStore       testrun.Store
+	assetStore         testrun.AssetStore
+	testProcedureStore testprocedure.Store
+	storage            storage.BlobStorage
+	logger             logger.Logger
 }
 
 // NewTestRunHandler creates a new test run handler.
-func NewTestRunHandler(testRunStore testrun.Store, assetStore testrun.AssetStore, storage storage.BlobStorage, log logger.Logger) *TestRunHandler {
+func NewTestRunHandler(testRunStore testrun.Store, assetStore testrun.AssetStore, testProcedureStore testprocedure.Store, storage storage.BlobStorage, log logger.Logger) *TestRunHandler {
 	return &TestRunHandler{
-		testRunStore: testRunStore,
-		assetStore:   assetStore,
-		storage:      storage,
-		logger:       log,
+		testRunStore:       testRunStore,
+		assetStore:         assetStore,
+		testProcedureStore: testProcedureStore,
+		storage:            storage,
+		logger:             log,
 	}
 }
 
@@ -531,6 +536,139 @@ func (h *TestRunHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondSuccess(w, "asset deleted successfully")
+}
+
+// GenerateGuide creates a ZIP archive containing a guide.md and all run assets.
+func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
+	// Extract test run ID from URL
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
+		return
+	}
+
+	ctx := r.Context()
+
+	// Fetch test run
+	tr, err := h.testRunStore.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, testrun.ErrTestRunNotFound) {
+			respondError(w, http.StatusNotFound, "test run not found")
+			return
+		}
+		h.logger.Error(ctx, "failed to get test run", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test run")
+		return
+	}
+
+	// Fetch test procedure
+	proc, err := h.testProcedureStore.GetByID(ctx, tr.TestProcedureID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to get test procedure", map[string]interface{}{
+			"error":                err.Error(),
+			"test_procedure_id":    tr.TestProcedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+		return
+	}
+
+	// Fetch all assets
+	assets, err := h.assetStore.ListByTestRun(ctx, id)
+	if err != nil {
+		h.logger.Error(ctx, "failed to list assets", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to list assets")
+		return
+	}
+
+	// Build guide.md content
+	var md strings.Builder
+	fmt.Fprintf(&md, "# %s\n\n", proc.Name)
+	if proc.Description != "" {
+		fmt.Fprintf(&md, "%s\n\n", proc.Description)
+	}
+	fmt.Fprintf(&md, "## Overview\n\n")
+	if tr.Notes != "" {
+		fmt.Fprintf(&md, "%s\n\n", tr.Notes)
+	}
+	fmt.Fprintf(&md, "---\n\n")
+
+	for i, asset := range assets {
+		fmt.Fprintf(&md, "## Step %d\n\n", i+1)
+		if asset.AssetType == testrun.AssetTypeImage {
+			fmt.Fprintf(&md, "![Step %d](./assets/%s)\n\n", i+1, asset.FileName)
+		} else {
+			fmt.Fprintf(&md, "[%s](./assets/%s)\n\n", asset.FileName, asset.FileName)
+		}
+		if asset.Description != "" {
+			fmt.Fprintf(&md, "%s\n\n", asset.Description)
+		}
+		fmt.Fprintf(&md, "---\n\n")
+	}
+
+	// Build ZIP archive in memory
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	// Write guide.md
+	guideWriter, err := zw.Create("guide.md")
+	if err != nil {
+		h.logger.Error(ctx, "failed to create guide.md in zip", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to generate guide")
+		return
+	}
+	if _, err := io.WriteString(guideWriter, md.String()); err != nil {
+		h.logger.Error(ctx, "failed to write guide.md", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to generate guide")
+		return
+	}
+
+	// Write each asset into assets/ folder
+	for _, asset := range assets {
+		reader, err := h.storage.Download(ctx, asset.AssetPath)
+		if err != nil {
+			h.logger.Error(ctx, "failed to download asset for guide", map[string]interface{}{
+				"error": err.Error(),
+				"path":  asset.AssetPath,
+			})
+			respondError(w, http.StatusInternalServerError, "failed to download asset")
+			return
+		}
+
+		assetWriter, err := zw.Create("assets/" + asset.FileName)
+		if err != nil {
+			reader.Close()
+			h.logger.Error(ctx, "failed to create asset entry in zip", map[string]interface{}{"error": err.Error()})
+			respondError(w, http.StatusInternalServerError, "failed to generate guide")
+			return
+		}
+
+		if _, err := io.Copy(assetWriter, reader); err != nil {
+			reader.Close()
+			h.logger.Error(ctx, "failed to write asset to zip", map[string]interface{}{"error": err.Error()})
+			respondError(w, http.StatusInternalServerError, "failed to generate guide")
+			return
+		}
+		reader.Close()
+	}
+
+	if err := zw.Close(); err != nil {
+		h.logger.Error(ctx, "failed to close zip writer", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to generate guide")
+		return
+	}
+
+	// Write response
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "guide-"+id.String()+".zip"))
+	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+	if _, err := io.Copy(w, &buf); err != nil {
+		h.logger.Error(ctx, "failed to write zip response", map[string]interface{}{"error": err.Error()})
+	}
 }
 
 // sanitizeFilename removes potentially dangerous characters from filenames.

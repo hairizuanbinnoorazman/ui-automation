@@ -449,6 +449,15 @@ viewRunDetails run assets =
 
             Nothing ->
                 Html.text ""
+        , Html.div
+            [ Html.Attributes.style "margin-top" "16px" ]
+            [ Html.a
+                [ Html.Attributes.href ("/api/v1/runs/" ++ run.id ++ "/guide")
+                , Html.Attributes.download ""
+                , Html.Attributes.class "mdc-button mdc-button--outlined"
+                ]
+                [ Html.text "Generate Guide" ]
+            ]
         , Html.h3 [ Html.Attributes.class "mdc-typography--headline6" ] [ Html.text "Assets" ]
         , if List.isEmpty assets then
             Html.div [] [ Html.text "No assets uploaded yet" ]
