@@ -100,17 +100,20 @@ func (gs *GeneratedScript) Validate() error {
 	if !gs.Framework.IsValid() {
 		return ErrInvalidFramework
 	}
-	if gs.ScriptPath == "" {
-		return ErrInvalidScriptPath
-	}
-	if gs.FileName == "" {
-		return ErrInvalidFileName
-	}
 	if gs.GeneratedBy == uuid.Nil {
 		return ErrInvalidGeneratedBy
 	}
 	if !gs.GenerationStatus.IsValid() {
 		return errors.New("invalid generation status")
+	}
+	// ScriptPath and FileName are only required once generation has completed.
+	if gs.GenerationStatus == StatusCompleted {
+		if gs.ScriptPath == "" {
+			return ErrInvalidScriptPath
+		}
+		if gs.FileName == "" {
+			return ErrInvalidFileName
+		}
 	}
 	return nil
 }
