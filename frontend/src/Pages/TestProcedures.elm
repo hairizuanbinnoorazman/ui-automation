@@ -3,7 +3,7 @@ module Pages.TestProcedures exposing (Model, Msg, init, update, view)
 import API
 import Dict exposing (Dict)
 import File exposing (File)
-import Html exposing (Html, button, div, h2, h3, h4, input, li, p, span, text, textarea, ul)
+import Html exposing (Html, button, div, h2, h3, h4, input, label, li, p, span, text, textarea, ul)
 import Html.Attributes exposing (class, disabled, placeholder, style, type_, value)
 import Html.Events exposing (on, onClick, onInput)
 import Http
