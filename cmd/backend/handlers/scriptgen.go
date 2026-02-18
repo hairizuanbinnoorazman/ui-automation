@@ -111,10 +111,7 @@ type GenerateScriptRequest struct {
 }
 
 // ListScriptsResponse represents a list scripts response.
-type ListScriptsResponse struct {
-	Scripts []*scriptgen.GeneratedScript `json:"scripts"`
-	Total   int                          `json:"total"`
-}
+type ListScriptsResponse = PaginatedResponse
 
 // Generate handles generating a new automation script.
 // It creates a DB record with StatusGenerating, returns 202 Accepted immediately,
