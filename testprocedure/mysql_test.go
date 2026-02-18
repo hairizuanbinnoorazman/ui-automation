@@ -298,7 +298,7 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	_, store := setupTestStore(t)
 	ctx := context.Background()
 
-	t.Run("get history excludes draft", func(t *testing.T) {
+	t.Run("get history includes draft and committed versions", func(t *testing.T) {
 		projectID := uuid.New()
 		createdBy := uuid.New()
 		original := createTestProcedure("Versioned", "Description", projectID, createdBy, nil)

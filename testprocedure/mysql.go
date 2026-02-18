@@ -386,21 +386,29 @@ func (s *MySQLStore) CreateWithDraft(ctx context.Context, tp *TestProcedure) (*T
 
 // UpdateDraft updates only the draft version (v0) with the given setters.
 func (s *MySQLStore) UpdateDraft(ctx context.Context, procedureID uuid.UUID, setters ...UpdateSetter) error {
-	// Get the draft
-	draft, err := s.GetDraft(ctx, procedureID)
-	if err != nil {
-		return err
-	}
+	var draftID uuid.UUID
 
-	// Apply all setters
-	for _, setter := range setters {
-		if err := setter(draft); err != nil {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		draft, err := s.getDraftWithTx(ctx, tx, procedureID)
+		if err != nil {
 			return err
 		}
-	}
 
-	// Save the updated draft
-	if err := s.db.WithContext(ctx).Save(draft).Error; err != nil {
+		for _, setter := range setters {
+			if err := setter(draft); err != nil {
+				return err
+			}
+		}
+
+		if err := tx.WithContext(ctx).Save(draft).Error; err != nil {
+			return err
+		}
+
+		draftID = draft.ID
+		return nil
+	})
+
+	if err != nil {
 		s.logger.Error(ctx, "failed to update draft", map[string]interface{}{
 			"error":        err.Error(),
 			"procedure_id": procedureID.String(),
@@ -410,7 +418,7 @@ func (s *MySQLStore) UpdateDraft(ctx context.Context, procedureID uuid.UUID, set
 
 	s.logger.Info(ctx, "draft updated", map[string]interface{}{
 		"procedure_id": procedureID.String(),
-		"draft_id":     draft.ID.String(),
+		"draft_id":     draftID.String(),
 	})
 
 	return nil
@@ -418,25 +426,32 @@ func (s *MySQLStore) UpdateDraft(ctx context.Context, procedureID uuid.UUID, set
 
 // ResetDraft resets the draft (v0) to match the latest committed version.
 func (s *MySQLStore) ResetDraft(ctx context.Context, procedureID uuid.UUID) error {
-	// Get latest committed version
-	committed, err := s.GetLatestCommitted(ctx, procedureID)
+	var draftID uuid.UUID
+
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		committed, err := s.getLatestCommittedWithTx(ctx, tx, procedureID)
+		if err != nil {
+			return err
+		}
+
+		draft, err := s.getDraftWithTx(ctx, tx, procedureID)
+		if err != nil {
+			return err
+		}
+
+		draft.Name = committed.Name
+		draft.Description = committed.Description
+		draft.Steps = committed.Steps
+
+		if err := tx.WithContext(ctx).Save(draft).Error; err != nil {
+			return err
+		}
+
+		draftID = draft.ID
+		return nil
+	})
+
 	if err != nil {
-		return err
-	}
-
-	// Get draft
-	draft, err := s.GetDraft(ctx, procedureID)
-	if err != nil {
-		return err
-	}
-
-	// Copy fields from committed to draft
-	draft.Name = committed.Name
-	draft.Description = committed.Description
-	draft.Steps = committed.Steps
-
-	// Save the draft
-	if err := s.db.WithContext(ctx).Save(draft).Error; err != nil {
 		s.logger.Error(ctx, "failed to reset draft", map[string]interface{}{
 			"error":        err.Error(),
 			"procedure_id": procedureID.String(),
@@ -446,7 +461,7 @@ func (s *MySQLStore) ResetDraft(ctx context.Context, procedureID uuid.UUID) erro
 
 	s.logger.Info(ctx, "draft reset to committed version", map[string]interface{}{
 		"procedure_id": procedureID.String(),
-		"draft_id":     draft.ID.String(),
+		"draft_id":     draftID.String(),
 	})
 
 	return nil
@@ -558,6 +573,33 @@ func (s *MySQLStore) getDraftWithTx(ctx context.Context, tx *gorm.DB, procedureI
 	}
 
 	return &draft, nil
+}
+
+// getLatestCommittedWithTx is a helper to get the latest committed version within a transaction.
+func (s *MySQLStore) getLatestCommittedWithTx(ctx context.Context, tx *gorm.DB, procedureID uuid.UUID) (*TestProcedure, error) {
+	proc, err := s.getByIDWithTx(ctx, tx, procedureID)
+	if err != nil {
+		return nil, err
+	}
+
+	rootID := procedureID
+	if proc.ParentID != nil {
+		rootID = *proc.ParentID
+	}
+
+	var committed TestProcedure
+	err = tx.WithContext(ctx).
+		Where("(id = ? OR parent_id = ?) AND version >= ? AND is_latest = ?", rootID, rootID, 1, true).
+		First(&committed).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNoCommittedVersion
+		}
+		return nil, err
+	}
+
+	return &committed, nil
 }
 
 // getByIDWithTx is a helper to get by ID within a transaction.

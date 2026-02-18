@@ -177,16 +177,16 @@ uploadStepImage procedureId file toMsg =
         }
 
 
-getDraftDiff : String -> String -> (Result Http.Error DraftDiff -> msg) -> Cmd msg
-getDraftDiff projectId procedureId toMsg =
+getDraftDiff : String -> (Result Http.Error DraftDiff -> msg) -> Cmd msg
+getDraftDiff procedureId toMsg =
     Http.get
         { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/diff"
         , expect = Http.expectJson toMsg draftDiffDecoder
         }
 
 
-resetDraft : String -> String -> (Result Http.Error () -> msg) -> Cmd msg
-resetDraft projectId procedureId toMsg =
+resetDraft : String -> (Result Http.Error () -> msg) -> Cmd msg
+resetDraft procedureId toMsg =
     Http.post
         { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/draft/reset"
         , body = Http.emptyBody
@@ -194,8 +194,8 @@ resetDraft projectId procedureId toMsg =
         }
 
 
-commitDraft : String -> String -> (Result Http.Error TestProcedure -> msg) -> Cmd msg
-commitDraft projectId procedureId toMsg =
+commitDraft : String -> (Result Http.Error TestProcedure -> msg) -> Cmd msg
+commitDraft procedureId toMsg =
     Http.post
         { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/draft/commit"
         , body = Http.emptyBody

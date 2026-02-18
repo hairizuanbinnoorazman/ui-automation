@@ -150,7 +150,7 @@ update msg model =
             case model.selectedProcedure of
                 Just procedure ->
                     ( { model | viewMode = NewVersionMode, loading = True }
-                    , API.getDraftDiff model.projectId procedure.id DiffResponse
+                    , API.getDraftDiff procedure.id DiffResponse
                     )
 
                 Nothing ->
@@ -358,7 +358,7 @@ update msg model =
             case model.selectedProcedure of
                 Just procedure ->
                     ( { model | loading = True }
-                    , API.resetDraft model.projectId procedure.id DraftReset
+                    , API.resetDraft procedure.id DraftReset
                     )
 
                 Nothing ->
@@ -378,7 +378,7 @@ update msg model =
             case model.selectedProcedure of
                 Just procedure ->
                     ( { model | loading = True }
-                    , API.commitDraft model.projectId procedure.id VersionCommitted
+                    , API.commitDraft procedure.id VersionCommitted
                     )
 
                 Nothing ->
