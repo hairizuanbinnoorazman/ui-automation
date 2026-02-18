@@ -1,3 +1,21 @@
+# Workspace-aware configuration
+# Extract trailing number from directory name (e.g. "workspace-2" → "2")
+WORKSPACE_NUM := $(shell basename $(CURDIR) | grep -oE '[0-9]+$$')
+
+ifeq ($(WORKSPACE_NUM),)
+  APP_PORT         := 8080
+  WORKSPACE_SUFFIX :=
+else ifeq ($(WORKSPACE_NUM),1)
+  APP_PORT         := 8080
+  WORKSPACE_SUFFIX :=
+else
+  APP_PORT         := $(shell expr 8080 + $(WORKSPACE_NUM) - 1)
+  WORKSPACE_SUFFIX := -$(WORKSPACE_NUM)
+endif
+
+export APP_PORT
+export WORKSPACE_SUFFIX
+
 .PHONY: build run test migrate-up migrate-down clean install-deps docker-dev docker-build-elm docker-check-elm docker-rebuild-elm
 
 BINARY_NAME=backend
