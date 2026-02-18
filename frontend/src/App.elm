@@ -440,10 +440,10 @@ view model =
                     }
                 }
             """ ]
+        , viewTopAppBar model
         , Html.div
             [ Html.Attributes.class "mdc-drawer-app-content" ]
-            [ viewTopAppBar model
-            , Html.div
+            [ Html.div
                 [ Html.Attributes.style "display" "flex" ]
                 [ if model.user /= Nothing then
                     viewDrawer model
@@ -464,13 +464,18 @@ view model =
 viewTopAppBar : Model -> Html Msg
 viewTopAppBar model =
     Html.header
-        [ Html.Attributes.class "mdc-top-app-bar"
-        , Html.Attributes.style "background" "#6200ee"
+        [ Html.Attributes.style "background" "#6200ee"
         , Html.Attributes.style "color" "white"
-        , Html.Attributes.style "padding" "16px"
+        , Html.Attributes.style "padding" "16px 24px"
         , Html.Attributes.style "display" "flex"
+        , Html.Attributes.style "flex-direction" "row"
         , Html.Attributes.style "justify-content" "space-between"
         , Html.Attributes.style "align-items" "center"
+        , Html.Attributes.style "box-shadow" "0 2px 4px rgba(0,0,0,0.1)"
+        , Html.Attributes.style "position" "sticky"
+        , Html.Attributes.style "top" "0"
+        , Html.Attributes.style "z-index" "100"
+        , Html.Attributes.style "box-sizing" "border-box"
         ]
         [ Html.div
             [ Html.Attributes.style "display" "flex"
@@ -480,20 +485,23 @@ viewTopAppBar model =
             [ if model.user /= Nothing then
                 Html.button
                     [ Html.Events.onClick ToggleDrawer
-                    , Html.Attributes.class "mdc-icon-button"
                     , Html.Attributes.style "color" "white"
                     , Html.Attributes.style "background" "none"
                     , Html.Attributes.style "border" "none"
                     , Html.Attributes.style "cursor" "pointer"
+                    , Html.Attributes.style "font-size" "24px"
+                    , Html.Attributes.style "padding" "8px"
+                    , Html.Attributes.style "display" "flex"
+                    , Html.Attributes.style "align-items" "center"
                     ]
                     [ Html.text "☰" ]
 
               else
                 Html.text ""
             , Html.h1
-                [ Html.Attributes.class "mdc-top-app-bar__title"
-                , Html.Attributes.style "margin" "0"
+                [ Html.Attributes.style "margin" "0"
                 , Html.Attributes.style "font-size" "20px"
+                , Html.Attributes.style "font-weight" "500"
                 ]
                 [ Html.text "UI Automation" ]
             ]
@@ -503,17 +511,26 @@ viewTopAppBar model =
                     [ Html.Attributes.style "display" "flex"
                     , Html.Attributes.style "align-items" "center"
                     , Html.Attributes.style "gap" "16px"
+                    , Html.Attributes.style "margin-right" "8px"
                     ]
-                    [ Html.span [] [ Html.text user.username ]
+                    [ Html.span
+                        [ Html.Attributes.style "font-size" "14px"
+                        , Html.Attributes.style "white-space" "nowrap"
+                        ]
+                        [ Html.text user.username ]
                     , Html.button
                         [ Html.Events.onClick Logout
-                        , Html.Attributes.class "mdc-icon-button"
                         , Html.Attributes.style "color" "white"
-                        , Html.Attributes.style "background" "none"
-                        , Html.Attributes.style "border" "none"
+                        , Html.Attributes.style "background" "rgba(255, 255, 255, 0.1)"
+                        , Html.Attributes.style "border" "1px solid rgba(255, 255, 255, 0.3)"
+                        , Html.Attributes.style "border-radius" "4px"
                         , Html.Attributes.style "cursor" "pointer"
+                        , Html.Attributes.style "font-size" "14px"
+                        , Html.Attributes.style "padding" "6px 12px"
+                        , Html.Attributes.style "display" "flex"
+                        , Html.Attributes.style "align-items" "center"
                         ]
-                        [ Html.text "⎋" ]
+                        [ Html.text "Logout" ]
                     ]
 
             Nothing ->
