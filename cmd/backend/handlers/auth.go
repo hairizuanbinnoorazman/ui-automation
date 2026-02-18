@@ -214,6 +214,16 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if user is active
+	if !currentUser.IsActive {
+		h.logger.Warn(r.Context(), "inactive user attempted to validate session", map[string]interface{}{
+			"user_id": userID.String(),
+			"email":   currentUser.Email,
+		})
+		respondError(w, http.StatusUnauthorized, "user account is inactive")
+		return
+	}
+
 	h.logger.Info(r.Context(), "session validated successfully", map[string]interface{}{
 		"user_id": userID.String(),
 		"email":   currentUser.Email,
