@@ -483,9 +483,9 @@ func sanitizeProcedureName(name string) string {
 	)
 	name = replacer.Replace(name)
 
-	// Limit length
-	if len(name) > 100 {
-		name = name[:100]
+	// Limit length (truncate at rune boundary to avoid splitting multi-byte UTF-8 characters)
+	if runes := []rune(name); len(runes) > 100 {
+		name = string(runes[:100])
 	}
 
 	return name
