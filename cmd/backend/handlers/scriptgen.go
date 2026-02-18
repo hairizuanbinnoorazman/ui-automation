@@ -544,6 +544,19 @@ func (h *ScriptGenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// filenameSanitizer replaces characters that are problematic in filenames or storage paths.
+var filenameSanitizer = strings.NewReplacer(
+	"/", "_",
+	"\\", "_",
+	":", "_",
+	"*", "_",
+	"?", "_",
+	"\"", "_",
+	"<", "_",
+	">", "_",
+	"|", "_",
+)
+
 // sanitizeProcedureName removes or replaces characters that are problematic in filenames.
 func sanitizeProcedureName(name string) string {
 	// Remove control characters (\n, \r, \x00, etc.) to prevent them from
@@ -560,18 +573,7 @@ func sanitizeProcedureName(name string) string {
 	name = strings.ReplaceAll(name, " ", "_")
 
 	// Remove or replace other problematic characters
-	replacer := strings.NewReplacer(
-		"/", "_",
-		"\\", "_",
-		":", "_",
-		"*", "_",
-		"?", "_",
-		"\"", "_",
-		"<", "_",
-		">", "_",
-		"|", "_",
-	)
-	name = replacer.Replace(name)
+	name = filenameSanitizer.Replace(name)
 
 	// Limit length (truncate at rune boundary to avoid splitting multi-byte UTF-8 characters)
 	if runes := []rune(name); len(runes) > 100 {

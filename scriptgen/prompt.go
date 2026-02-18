@@ -2,6 +2,7 @@ package scriptgen
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
@@ -11,9 +12,22 @@ import (
 // It validates and sanitizes all user-provided content before embedding it in the prompt
 // to prevent prompt injection attacks.
 func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework, config *ValidationConfig) (string, error) {
-	// Validate length limits first
 	if config == nil {
 		config = DefaultValidationConfig()
+	}
+
+	// Validate before sanitizing: enforce length limits, step structure, and injection patterns.
+	limits := testprocedure.ValidationLimits{
+		MaxNameLength:        config.MaxNameLength,
+		MaxDescriptionLength: config.MaxDescriptionLength,
+		MaxStepsJSONLength:   config.MaxStepsJSONLength,
+		MaxStepsCount:        config.MaxStepsCount,
+	}
+	if err := testprocedure.ValidateForScriptGeneration(procedure, limits); err != nil {
+		if errors.Is(err, testprocedure.ErrNameTooLong) || errors.Is(err, testprocedure.ErrDescriptionTooLong) {
+			return "", err
+		}
+		return "", fmt.Errorf("security validation failed: %w", err)
 	}
 
 	// Sanitize all user-provided content
