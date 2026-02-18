@@ -32,6 +32,8 @@ type alias Model =
     , committedProcedure : Maybe TestProcedure
     , editingSteps : List TestStep
     , uploadingImages : Dict Int Bool
+    , draftLoading : Bool
+    , committedLoading : Bool
     , loading : Bool
     , error : Maybe String
     }
@@ -50,6 +52,8 @@ init projectId =
       , committedProcedure = Nothing
       , editingSteps = []
       , uploadingImages = Dict.empty
+      , draftLoading = False
+      , committedLoading = False
       , loading = False
       , error = Nothing
       }
@@ -115,7 +119,10 @@ update msg model =
             ( { model
                 | selectedProcedure = Just procedure
                 , viewMode = ViewMode
-                , loading = True
+                , draftProcedure = Nothing
+                , committedProcedure = Nothing
+                , draftLoading = True
+                , committedLoading = True
               }
             , Cmd.batch
                 [ API.getTestProcedure model.projectId procedure.id True DraftResponse
@@ -152,7 +159,7 @@ update msg model =
         LoadDraftAndCommitted ->
             case model.selectedProcedure of
                 Just procedure ->
-                    ( { model | loading = True }
+                    ( { model | draftLoading = True, committedLoading = True }
                     , Cmd.batch
                         [ API.getTestProcedure model.projectId procedure.id True DraftResponse
                         , API.getTestProcedure model.projectId procedure.id False CommittedResponse
@@ -165,24 +172,24 @@ update msg model =
         DraftResponse result ->
             case result of
                 Ok draft ->
-                    ( { model | draftProcedure = Just draft, loading = False }
+                    ( { model | draftProcedure = Just draft, draftLoading = False }
                     , Cmd.none
                     )
 
                 Err _ ->
-                    ( { model | draftProcedure = Nothing, loading = False }
+                    ( { model | draftProcedure = Nothing, draftLoading = False }
                     , Cmd.none
                     )
 
         CommittedResponse result ->
             case result of
                 Ok committed ->
-                    ( { model | committedProcedure = Just committed, loading = False }
+                    ( { model | committedProcedure = Just committed, committedLoading = False }
                     , Cmd.none
                     )
 
                 Err _ ->
-                    ( { model | committedProcedure = Nothing, loading = False }
+                    ( { model | committedProcedure = Nothing, committedLoading = False }
                     , Cmd.none
                     )
 
@@ -522,25 +529,29 @@ viewModeSelector model =
 
 viewModeView : Model -> Html Msg
 viewModeView model =
-    case ( model.committedProcedure, model.draftProcedure ) of
-        ( Just committed, _ ) ->
-            div [ class "view-mode" ]
-                [ h3 [] [ text committed.name ]
-                , p [] [ text committed.description ]
-                , viewSteps committed.steps
-                ]
+    if model.draftLoading || model.committedLoading then
+        div [] [ text "Loading..." ]
 
-        ( Nothing, Just draft ) ->
-            div [ class "view-mode draft-only" ]
-                [ div [ class "draft-banner" ]
-                    [ text "⚠ Draft only - No published version yet" ]
-                , h3 [] [ text draft.name ]
-                , p [] [ text draft.description ]
-                , viewSteps draft.steps
-                ]
+    else
+        case ( model.committedProcedure, model.draftProcedure ) of
+            ( Just committed, _ ) ->
+                div [ class "view-mode" ]
+                    [ h3 [] [ text committed.name ]
+                    , p [] [ text committed.description ]
+                    , viewSteps committed.steps
+                    ]
 
-        _ ->
-            div [] [ text "Loading..." ]
+            ( Nothing, Just draft ) ->
+                div [ class "view-mode draft-only" ]
+                    [ div [ class "draft-banner" ]
+                        [ text "⚠ Draft only - No published version yet" ]
+                    , h3 [] [ text draft.name ]
+                    , p [] [ text draft.description ]
+                    , viewSteps draft.steps
+                    ]
+
+            _ ->
+                div [] [ text "No data available" ]
 
 
 viewSteps : List TestStep -> Html Msg
