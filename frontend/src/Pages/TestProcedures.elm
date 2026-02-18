@@ -699,7 +699,27 @@ viewModeView model =
         case ( model.committedProcedure, model.draftProcedure ) of
             ( Just committed, _ ) ->
                 div []
-                    [ h3 [ class "mdc-typography--headline5" ] [ text committed.name ]
+                    [ div
+                        [ style "display" "flex"
+                        , style "align-items" "center"
+                        , style "gap" "8px"
+                        , style "margin-bottom" "4px"
+                        ]
+                        [ h3
+                            [ class "mdc-typography--headline5"
+                            , style "margin" "0"
+                            ]
+                            [ text committed.name ]
+                        , span
+                            [ style "background-color" "#1976d2"
+                            , style "color" "white"
+                            , style "font-size" "12px"
+                            , style "font-weight" "500"
+                            , style "padding" "2px 8px"
+                            , style "border-radius" "12px"
+                            ]
+                            [ text ("v" ++ String.fromInt committed.version) ]
+                        ]
                     , p [ class "mdc-typography--body1" ] [ text committed.description ]
                     , viewSteps committed.steps
                     ]
@@ -887,26 +907,63 @@ fileDecoder =
 
 viewNewVersionMode : Model -> Html Msg
 viewNewVersionMode model =
+    let
+        nextVersionNumber =
+            case model.committedProcedure of
+                Just committed ->
+                    committed.version + 1
+
+                Nothing ->
+                    1
+
+        currentVersionLabel =
+            case model.committedProcedure of
+                Just committed ->
+                    "Current Version (v" ++ String.fromInt committed.version ++ ")"
+
+                Nothing ->
+                    "Current Version (none)"
+
+        draftVersionLabel =
+            "Draft Changes -> will become v" ++ String.fromInt nextVersionNumber
+    in
     div []
-        [ h3 [ class "mdc-typography--headline5" ] [ text "Review Changes" ]
+        [ h3 [ class "mdc-typography--headline5" ]
+            [ text ("Creating Version " ++ String.fromInt nextVersionNumber) ]
         , div
             [ style "display" "flex"
             , style "gap" "16px"
             ]
             [ div [ style "flex" "1" ]
-                [ h4 [ class "mdc-typography--subtitle1" ] [ text "Current Version" ]
+                [ h4 [ class "mdc-typography--subtitle1" ] [ text currentVersionLabel ]
                 , case model.committedProcedure of
                     Just committed ->
-                        viewSteps committed.steps
+                        div []
+                            [ p
+                                [ class "mdc-typography--body2"
+                                , style "color" "#555"
+                                , style "margin-bottom" "12px"
+                                ]
+                                [ text committed.description ]
+                            , viewSteps committed.steps
+                            ]
 
                     Nothing ->
                         p [ class "mdc-typography--body1" ] [ text "No published version" ]
                 ]
             , div [ style "flex" "1" ]
-                [ h4 [ class "mdc-typography--subtitle1" ] [ text "Draft Changes" ]
+                [ h4 [ class "mdc-typography--subtitle1" ] [ text draftVersionLabel ]
                 , case model.draftProcedure of
                     Just draft ->
-                        viewSteps draft.steps
+                        div []
+                            [ p
+                                [ class "mdc-typography--body2"
+                                , style "color" "#555"
+                                , style "margin-bottom" "12px"
+                                ]
+                                [ text draft.description ]
+                            , viewSteps draft.steps
+                            ]
 
                     Nothing ->
                         p [ class "mdc-typography--body1" ] [ text "No draft" ]
