@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
@@ -466,6 +467,16 @@ func (h *ScriptGenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // sanitizeProcedureName removes or replaces characters that are problematic in filenames.
 func sanitizeProcedureName(name string) string {
+	// Remove control characters (\n, \r, \x00, etc.) to prevent them from
+	// reaching the storage path or database file_name column.
+	var stripped strings.Builder
+	for _, r := range name {
+		if !unicode.IsControl(r) {
+			stripped.WriteRune(r)
+		}
+	}
+	name = stripped.String()
+
 	// Replace spaces with underscores
 	name = strings.ReplaceAll(name, " ", "_")
 
