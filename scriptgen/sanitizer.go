@@ -14,6 +14,15 @@ var (
 	// allowedNameChars matches alphanumeric, spaces, hyphens, underscores, and parentheses
 	allowedNameChars = regexp.MustCompile(`^[a-zA-Z0-9 \-_()]+$`)
 
+	// multipleSpaces matches one or more whitespace characters
+	multipleSpaces = regexp.MustCompile(`\s+`)
+
+	// multipleNewlines matches 3 or more consecutive newlines
+	multipleNewlines = regexp.MustCompile(`\n{3,}`)
+
+	// multipleSpacesOrTabs matches one or more spaces or tabs
+	multipleSpacesOrTabs = regexp.MustCompile(`[ \t]+`)
+
 	// validActionTypes defines the allowed step action types
 	validActionTypes = map[string]bool{
 		"navigate":    true,
@@ -50,7 +59,7 @@ func SanitizeTestProcedureName(name string) string {
 	}
 
 	// Normalize multiple spaces to single space
-	name = regexp.MustCompile(`\s+`).ReplaceAllString(name, " ")
+	name = multipleSpaces.ReplaceAllString(name, " ")
 
 	// Final trim
 	return strings.TrimSpace(name)
@@ -71,12 +80,12 @@ func SanitizeTestProcedureDescription(desc string) string {
 
 	// Normalize excessive whitespace (but keep paragraph breaks)
 	// Replace 3+ newlines with 2 newlines
-	desc = regexp.MustCompile(`\n{3,}`).ReplaceAllString(desc, "\n\n")
+	desc = multipleNewlines.ReplaceAllString(desc, "\n\n")
 
 	// Normalize spaces and tabs within lines
 	lines := strings.Split(desc, "\n")
 	for i, line := range lines {
-		lines[i] = regexp.MustCompile(`[ \t]+`).ReplaceAllString(line, " ")
+		lines[i] = multipleSpacesOrTabs.ReplaceAllString(line, " ")
 		lines[i] = strings.TrimSpace(lines[i])
 	}
 	desc = strings.Join(lines, "\n")
