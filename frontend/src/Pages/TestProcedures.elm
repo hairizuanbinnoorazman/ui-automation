@@ -450,7 +450,7 @@ viewPagination model =
     in
     div [ class "pagination" ]
         [ button
-            [ onClick (LoadPage (model.offset - model.limit))
+            [ onClick (LoadPage (max 0 (model.offset - model.limit)))
             , disabled (currentPage == 0)
             ]
             [ text "Previous" ]
@@ -487,6 +487,19 @@ viewSelectedProcedure model =
                 ]
 
 
+procedureContentEqual : Maybe TestProcedure -> Maybe TestProcedure -> Bool
+procedureContentEqual maybeA maybeB =
+    case ( maybeA, maybeB ) of
+        ( Nothing, Nothing ) ->
+            True
+
+        ( Just a, Just b ) ->
+            a.name == b.name && a.description == b.description && a.steps == b.steps
+
+        _ ->
+            False
+
+
 viewModeSelector : Model -> Html Msg
 viewModeSelector model =
     div [ class "mode-selector" ]
@@ -521,7 +534,7 @@ viewModeSelector model =
                  else
                     ""
                 )
-            , disabled (model.draftProcedure == model.committedProcedure)
+            , disabled (procedureContentEqual model.draftProcedure model.committedProcedure)
             ]
             [ text "New Version" ]
         ]
