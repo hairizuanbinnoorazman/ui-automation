@@ -72,11 +72,9 @@ type alias TestProcedure =
 
 
 type alias TestStep =
-    { action : String
-    , selector : Maybe String
-    , url : Maybe String
-    , value : Maybe String
-    , endpoint : Maybe String
+    { name : String
+    , instructions : String
+    , imagePaths : List String
     }
 
 
@@ -84,6 +82,12 @@ type alias TestProcedureInput =
     { name : String
     , description : String
     , steps : List TestStep
+    }
+
+
+type alias DraftDiff =
+    { draft : Maybe TestProcedure
+    , committed : Maybe TestProcedure
     }
 
 
@@ -184,12 +188,10 @@ projectDecoder =
 
 testStepDecoder : Decoder TestStep
 testStepDecoder =
-    Decode.map5 TestStep
-        (Decode.field "action" Decode.string)
-        (Decode.maybe (Decode.field "selector" Decode.string))
-        (Decode.maybe (Decode.field "url" Decode.string))
-        (Decode.maybe (Decode.field "value" Decode.string))
-        (Decode.maybe (Decode.field "endpoint" Decode.string))
+    Decode.map3 TestStep
+        (Decode.field "name" Decode.string)
+        (Decode.field "instructions" Decode.string)
+        (Decode.field "image_paths" (Decode.list Decode.string))
 
 
 testProcedureDecoder : Decoder TestProcedure
@@ -214,6 +216,13 @@ testProcedureDecoder =
                     (Decode.field "updated_at" timeDecoder)
                     (Decode.maybe (Decode.field "deleted_at" timeDecoder))
             )
+
+
+draftDiffDecoder : Decoder DraftDiff
+draftDiffDecoder =
+    Decode.map2 DraftDiff
+        (Decode.maybe (Decode.field "draft" testProcedureDecoder))
+        (Decode.maybe (Decode.field "committed" testProcedureDecoder))
 
 
 testRunStatusDecoder : Decoder TestRunStatus
@@ -336,14 +345,10 @@ projectInputEncoder input =
 testStepEncoder : TestStep -> Encode.Value
 testStepEncoder step =
     Encode.object
-        (List.filterMap identity
-            [ Just ( "action", Encode.string step.action )
-            , Maybe.map (\s -> ( "selector", Encode.string s )) step.selector
-            , Maybe.map (\u -> ( "url", Encode.string u )) step.url
-            , Maybe.map (\v -> ( "value", Encode.string v )) step.value
-            , Maybe.map (\e -> ( "endpoint", Encode.string e )) step.endpoint
-            ]
-        )
+        [ ( "name", Encode.string step.name )
+        , ( "instructions", Encode.string step.instructions )
+        , ( "image_paths", Encode.list Encode.string step.imagePaths )
+        ]
 
 
 testProcedureInputEncoder : TestProcedureInput -> Encode.Value

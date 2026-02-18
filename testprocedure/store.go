@@ -32,6 +32,24 @@ type Store interface {
 
 	// GetVersionHistory retrieves all versions of a test procedure.
 	GetVersionHistory(ctx context.Context, testProcedureID uuid.UUID) ([]*TestProcedure, error)
+
+	// GetDraft retrieves the draft version (version 0) for a procedure.
+	GetDraft(ctx context.Context, procedureID uuid.UUID) (*TestProcedure, error)
+
+	// GetLatestCommitted retrieves the latest committed version (version >= 1, is_latest=true).
+	GetLatestCommitted(ctx context.Context, procedureID uuid.UUID) (*TestProcedure, error)
+
+	// CreateWithDraft creates both a committed version (v1) and a draft (v0).
+	CreateWithDraft(ctx context.Context, tp *TestProcedure) (*TestProcedure, error)
+
+	// UpdateDraft updates only the draft version (v0) with the given setters.
+	UpdateDraft(ctx context.Context, procedureID uuid.UUID, setters ...UpdateSetter) error
+
+	// ResetDraft resets the draft (v0) to match the latest committed version.
+	ResetDraft(ctx context.Context, procedureID uuid.UUID) error
+
+	// CommitDraft creates a new committed version from the draft, incrementing version number.
+	CommitDraft(ctx context.Context, procedureID uuid.UUID) (*TestProcedure, error)
 }
 
 // UpdateSetter is a function that updates a test procedure field.

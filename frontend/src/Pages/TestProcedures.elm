@@ -1,19 +1,23 @@
 module Pages.TestProcedures exposing (Model, Msg, init, update, view)
 
 import API
-import Components
-import Html exposing (Html)
-import Html.Attributes
-import Html.Events
+import Dict exposing (Dict)
+import File exposing (File)
+import Html exposing (Html, button, div, h2, h3, h4, input, li, p, span, text, textarea, ul)
+import Html.Attributes exposing (class, disabled, placeholder, style, type_, value)
+import Html.Events exposing (on, onClick, onInput)
 import Http
 import Json.Decode as Decode
-import Json.Encode as Encode
-import Time
-import Types exposing (PaginatedResponse, TestProcedure, TestProcedureInput, TestStep, testStepDecoder, testStepEncoder)
-
+import Types exposing (DraftDiff, PaginatedResponse, TestProcedure, TestStep)
 
 
 -- MODEL
+
+
+type ProcedureViewMode
+    = ViewMode
+    | EditMode
+    | NewVersionMode
 
 
 type alias Model =
@@ -22,35 +26,14 @@ type alias Model =
     , total : Int
     , limit : Int
     , offset : Int
+    , selectedProcedure : Maybe TestProcedure
+    , viewMode : ProcedureViewMode
+    , draftProcedure : Maybe TestProcedure
+    , committedProcedure : Maybe TestProcedure
+    , editingSteps : List TestStep
+    , uploadingImages : Dict Int Bool
     , loading : Bool
     , error : Maybe String
-    , createDialog : Maybe CreateDialogState
-    , editDialog : Maybe EditDialogState
-    , versionsDialog : Maybe VersionsDialogState
-    , selectedProcedure : Maybe TestProcedure
-    }
-
-
-type alias CreateDialogState =
-    { name : String
-    , description : String
-    , stepsJson : String
-    , error : Maybe String
-    }
-
-
-type alias EditDialogState =
-    { procedure : TestProcedure
-    , name : String
-    , description : String
-    , stepsJson : String
-    , error : Maybe String
-    }
-
-
-type alias VersionsDialogState =
-    { procedure : TestProcedure
-    , versions : List TestProcedure
     }
 
 
@@ -61,12 +44,14 @@ init projectId =
       , total = 0
       , limit = 10
       , offset = 0
+      , selectedProcedure = Nothing
+      , viewMode = ViewMode
+      , draftProcedure = Nothing
+      , committedProcedure = Nothing
+      , editingSteps = []
+      , uploadingImages = Dict.empty
       , loading = False
       , error = Nothing
-      , createDialog = Nothing
-      , editDialog = Nothing
-      , versionsDialog = Nothing
-      , selectedProcedure = Nothing
       }
     , API.getTestProcedures projectId 10 0 ProceduresResponse
     )
@@ -80,277 +65,73 @@ type Msg
     = ProceduresResponse (Result Http.Error (PaginatedResponse TestProcedure))
     | LoadPage Int
     | SelectProcedure TestProcedure
-    | OpenCreateDialog
-    | CloseCreateDialog
-    | SetCreateName String
-    | SetCreateDescription String
-    | SetCreateStepsJson String
-    | SubmitCreate
-    | CreateResponse (Result Http.Error TestProcedure)
-    | OpenEditDialog TestProcedure
-    | CloseEditDialog
-    | SetEditName String
-    | SetEditDescription String
-    | SetEditStepsJson String
-    | SubmitEdit
-    | EditResponse (Result Http.Error TestProcedure)
-    | CreateVersion String
-    | CreateVersionResponse (Result Http.Error TestProcedure)
-    | OpenVersionsDialog TestProcedure
-    | CloseVersionsDialog
-    | VersionsResponse (Result Http.Error (List TestProcedure))
+    | SwitchToViewMode
+    | SwitchToEditMode
+    | SwitchToNewVersionMode
+    | LoadDraftAndCommitted
+    | DraftResponse (Result Http.Error TestProcedure)
+    | CommittedResponse (Result Http.Error TestProcedure)
+    | DiffResponse (Result Http.Error DraftDiff)
+    | AddStep
+    | RemoveStep Int
+    | UpdateStepName Int String
+    | UpdateStepInstructions Int String
+    | ImageSelected Int File
+    | ImageUploaded Int (Result Http.Error String)
+    | RemoveStepImage Int Int
+    | SaveDraft
+    | DraftSaved (Result Http.Error TestProcedure)
+    | ClearChanges
+    | DraftReset (Result Http.Error ())
+    | CommitVersion
+    | VersionCommitted (Result Http.Error TestProcedure)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ProceduresResponse (Ok response) ->
-            ( { model
-                | procedures = response.items
-                , total = response.total
-                , loading = False
-                , error = Nothing
-              }
-            , Cmd.none
-            )
+        ProceduresResponse result ->
+            case result of
+                Ok response ->
+                    ( { model
+                        | procedures = response.items
+                        , total = response.total
+                        , loading = False
+                      }
+                    , Cmd.none
+                    )
 
-        ProceduresResponse (Err error) ->
-            ( { model
-                | loading = False
-                , error = Just (httpErrorToString error)
-              }
-            , Cmd.none
-            )
+                Err _ ->
+                    ( { model | error = Just "Failed to load procedures", loading = False }
+                    , Cmd.none
+                    )
 
         LoadPage offset ->
-            ( { model | loading = True, offset = offset }
+            ( { model | offset = offset, loading = True }
             , API.getTestProcedures model.projectId model.limit offset ProceduresResponse
             )
 
         SelectProcedure procedure ->
-            ( { model | selectedProcedure = Just procedure }
-            , Cmd.none
-            )
-
-        OpenCreateDialog ->
             ( { model
-                | createDialog =
-                    Just
-                        { name = ""
-                        , description = ""
-                        , stepsJson = "[]"
-                        , error = Nothing
-                        }
+                | selectedProcedure = Just procedure
+                , viewMode = ViewMode
+                , loading = True
               }
-            , Cmd.none
+            , Cmd.batch
+                [ API.getTestProcedure model.projectId procedure.id True DraftResponse
+                , API.getTestProcedure model.projectId procedure.id False CommittedResponse
+                ]
             )
 
-        CloseCreateDialog ->
-            ( { model | createDialog = Nothing }
-            , Cmd.none
-            )
+        SwitchToViewMode ->
+            ( { model | viewMode = ViewMode }, Cmd.none )
 
-        SetCreateName name ->
-            case model.createDialog of
-                Just dialog ->
-                    ( { model | createDialog = Just { dialog | name = name, error = Nothing } }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        SetCreateDescription description ->
-            case model.createDialog of
-                Just dialog ->
-                    ( { model | createDialog = Just { dialog | description = description, error = Nothing } }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        SetCreateStepsJson stepsJson ->
-            case model.createDialog of
-                Just dialog ->
-                    ( { model | createDialog = Just { dialog | stepsJson = stepsJson, error = Nothing } }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        SubmitCreate ->
-            case model.createDialog of
-                Just dialog ->
-                    case parseStepsJson dialog.stepsJson of
-                        Err err ->
-                            ( { model
-                                | createDialog = Just { dialog | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err) }
-                              }
-                            , Cmd.none
-                            )
-
-                        Ok parsedSteps ->
-                            ( { model | loading = True }
-                            , API.createTestProcedure
-                                model.projectId
-                                { name = dialog.name
-                                , description = dialog.description
-                                , steps = parsedSteps
-                                }
-                                CreateResponse
-                            )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        CreateResponse (Ok procedure) ->
-            ( { model
-                | loading = False
-                , createDialog = Nothing
-              }
-            , API.getTestProcedures model.projectId model.limit model.offset ProceduresResponse
-            )
-
-        CreateResponse (Err error) ->
-            ( { model
-                | loading = False
-                , error = Just (httpErrorToString error)
-              }
-            , Cmd.none
-            )
-
-        OpenEditDialog procedure ->
-            ( { model
-                | editDialog =
-                    Just
-                        { procedure = procedure
-                        , name = procedure.name
-                        , description = procedure.description
-                        , stepsJson = stepsToJson procedure.steps
-                        , error = Nothing
-                        }
-              }
-            , Cmd.none
-            )
-
-        CloseEditDialog ->
-            ( { model | editDialog = Nothing }
-            , Cmd.none
-            )
-
-        SetEditName name ->
-            case model.editDialog of
-                Just dialog ->
-                    ( { model | editDialog = Just { dialog | name = name, error = Nothing } }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        SetEditDescription description ->
-            case model.editDialog of
-                Just dialog ->
-                    ( { model | editDialog = Just { dialog | description = description, error = Nothing } }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        SetEditStepsJson stepsJson ->
-            case model.editDialog of
-                Just dialog ->
-                    ( { model | editDialog = Just { dialog | stepsJson = stepsJson, error = Nothing } }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        SubmitEdit ->
-            case model.editDialog of
-                Just dialog ->
-                    case parseStepsJson dialog.stepsJson of
-                        Err err ->
-                            ( { model
-                                | editDialog = Just { dialog | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err) }
-                              }
-                            , Cmd.none
-                            )
-
-                        Ok parsedSteps ->
-                            ( { model | loading = True }
-                            , API.updateTestProcedure
-                                model.projectId
-                                dialog.procedure.id
-                                { name = dialog.name
-                                , description = dialog.description
-                                , steps = parsedSteps
-                                }
-                                EditResponse
-                            )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        EditResponse (Ok procedure) ->
-            ( { model
-                | loading = False
-                , editDialog = Nothing
-              }
-            , API.getTestProcedures model.projectId model.limit model.offset ProceduresResponse
-            )
-
-        EditResponse (Err error) ->
-            ( { model
-                | loading = False
-                , error = Just (httpErrorToString error)
-              }
-            , Cmd.none
-            )
-
-        CreateVersion procedureId ->
-            ( { model | loading = True }
-            , API.createProcedureVersion model.projectId procedureId CreateVersionResponse
-            )
-
-        CreateVersionResponse (Ok procedure) ->
-            ( { model | loading = False }
-            , API.getTestProcedures model.projectId model.limit model.offset ProceduresResponse
-            )
-
-        CreateVersionResponse (Err error) ->
-            ( { model
-                | loading = False
-                , error = Just (httpErrorToString error)
-              }
-            , Cmd.none
-            )
-
-        OpenVersionsDialog procedure ->
-            ( { model
-                | versionsDialog =
-                    Just
-                        { procedure = procedure
-                        , versions = []
-                        }
-              }
-            , API.getProcedureVersions model.projectId procedure.id VersionsResponse
-            )
-
-        CloseVersionsDialog ->
-            ( { model | versionsDialog = Nothing }
-            , Cmd.none
-            )
-
-        VersionsResponse (Ok versions) ->
-            case model.versionsDialog of
-                Just dialog ->
+        SwitchToEditMode ->
+            case model.draftProcedure of
+                Just draft ->
                     ( { model
-                        | versionsDialog = Just { dialog | versions = versions }
+                        | viewMode = EditMode
+                        , editingSteps = draft.steps
                       }
                     , Cmd.none
                     )
@@ -358,12 +139,259 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        VersionsResponse (Err error) ->
+        SwitchToNewVersionMode ->
+            case model.selectedProcedure of
+                Just procedure ->
+                    ( { model | viewMode = NewVersionMode, loading = True }
+                    , API.getDraftDiff model.projectId procedure.id DiffResponse
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        LoadDraftAndCommitted ->
+            case model.selectedProcedure of
+                Just procedure ->
+                    ( { model | loading = True }
+                    , Cmd.batch
+                        [ API.getTestProcedure model.projectId procedure.id True DraftResponse
+                        , API.getTestProcedure model.projectId procedure.id False CommittedResponse
+                        ]
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DraftResponse result ->
+            case result of
+                Ok draft ->
+                    ( { model | draftProcedure = Just draft, loading = False }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | draftProcedure = Nothing, loading = False }
+                    , Cmd.none
+                    )
+
+        CommittedResponse result ->
+            case result of
+                Ok committed ->
+                    ( { model | committedProcedure = Just committed, loading = False }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | committedProcedure = Nothing, loading = False }
+                    , Cmd.none
+                    )
+
+        DiffResponse result ->
+            case result of
+                Ok diff ->
+                    ( { model
+                        | draftProcedure = diff.draft
+                        , committedProcedure = diff.committed
+                        , loading = False
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to load diff", loading = False }
+                    , Cmd.none
+                    )
+
+        AddStep ->
             ( { model
-                | error = Just (httpErrorToString error)
+                | editingSteps =
+                    model.editingSteps
+                        ++ [ { name = "", instructions = "", imagePaths = [] } ]
               }
             , Cmd.none
             )
+
+        RemoveStep index ->
+            ( { model
+                | editingSteps =
+                    List.take index model.editingSteps
+                        ++ List.drop (index + 1) model.editingSteps
+              }
+            , Cmd.none
+            )
+
+        UpdateStepName index newName ->
+            ( { model
+                | editingSteps =
+                    List.indexedMap
+                        (\i step ->
+                            if i == index then
+                                { step | name = newName }
+
+                            else
+                                step
+                        )
+                        model.editingSteps
+              }
+            , Cmd.none
+            )
+
+        UpdateStepInstructions index newInstructions ->
+            ( { model
+                | editingSteps =
+                    List.indexedMap
+                        (\i step ->
+                            if i == index then
+                                { step | instructions = newInstructions }
+
+                            else
+                                step
+                        )
+                        model.editingSteps
+              }
+            , Cmd.none
+            )
+
+        ImageSelected index file ->
+            case model.selectedProcedure of
+                Just procedure ->
+                    ( { model | uploadingImages = Dict.insert index True model.uploadingImages }
+                    , API.uploadStepImage procedure.id file (ImageUploaded index)
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        ImageUploaded index result ->
+            case result of
+                Ok imagePath ->
+                    ( { model
+                        | editingSteps =
+                            List.indexedMap
+                                (\i step ->
+                                    if i == index then
+                                        { step | imagePaths = step.imagePaths ++ [ imagePath ] }
+
+                                    else
+                                        step
+                                )
+                                model.editingSteps
+                        , uploadingImages = Dict.remove index model.uploadingImages
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model
+                        | error = Just "Failed to upload image"
+                        , uploadingImages = Dict.remove index model.uploadingImages
+                      }
+                    , Cmd.none
+                    )
+
+        RemoveStepImage stepIndex imageIndex ->
+            ( { model
+                | editingSteps =
+                    List.indexedMap
+                        (\i step ->
+                            if i == stepIndex then
+                                { step
+                                    | imagePaths =
+                                        List.take imageIndex step.imagePaths
+                                            ++ List.drop (imageIndex + 1) step.imagePaths
+                                }
+
+                            else
+                                step
+                        )
+                        model.editingSteps
+              }
+            , Cmd.none
+            )
+
+        SaveDraft ->
+            case model.selectedProcedure of
+                Just procedure ->
+                    case model.draftProcedure of
+                        Just draft ->
+                            let
+                                input =
+                                    { name = draft.name
+                                    , description = draft.description
+                                    , steps = model.editingSteps
+                                    }
+                            in
+                            ( { model | loading = True }
+                            , API.updateTestProcedure model.projectId procedure.id input DraftSaved
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DraftSaved result ->
+            case result of
+                Ok draft ->
+                    ( { model
+                        | draftProcedure = Just draft
+                        , loading = False
+                        , error = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to save draft", loading = False }
+                    , Cmd.none
+                    )
+
+        ClearChanges ->
+            case model.selectedProcedure of
+                Just procedure ->
+                    ( { model | loading = True }
+                    , API.resetDraft model.projectId procedure.id DraftReset
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DraftReset result ->
+            case result of
+                Ok () ->
+                    ( model, update LoadDraftAndCommitted model |> Tuple.second )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to reset draft", loading = False }
+                    , Cmd.none
+                    )
+
+        CommitVersion ->
+            case model.selectedProcedure of
+                Just procedure ->
+                    ( { model | loading = True }
+                    , API.commitDraft model.projectId procedure.id VersionCommitted
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        VersionCommitted result ->
+            case result of
+                Ok newVersion ->
+                    ( { model
+                        | committedProcedure = Just newVersion
+                        , viewMode = ViewMode
+                        , loading = False
+                      }
+                    , API.getTestProcedures model.projectId model.limit model.offset ProceduresResponse
+                    )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to commit version", loading = False }
+                    , Cmd.none
+                    )
 
 
 
@@ -372,118 +400,35 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    Html.div []
-        [ Html.div
-            [ Html.Attributes.class "page-header"
+    div [ class "test-procedures-page" ]
+        [ h2 [] [ text "Test Procedures" ]
+        , div [ class "procedures-layout" ]
+            [ viewProcedureList model
+            , viewSelectedProcedure model
             ]
-            [ Html.h1 [ Html.Attributes.class "mdc-typography--headline3" ] [ Html.text "Test Procedures" ]
-            , Html.button
-                [ Html.Events.onClick OpenCreateDialog
-                , Html.Attributes.class "mdc-button mdc-button--raised"
-                ]
-                [ Html.text "Create Procedure" ]
-            ]
-        , case model.error of
-            Just err ->
-                Html.div
-                    [ Html.Attributes.style "color" "red"
-                    , Html.Attributes.style "margin-bottom" "20px"
-                    ]
-                    [ Html.text err ]
+        ]
 
-            Nothing ->
-                Html.text ""
-        , if model.loading && List.isEmpty model.procedures then
-            Html.div [] [ Html.text "Loading..." ]
+
+viewProcedureList : Model -> Html Msg
+viewProcedureList model =
+    div [ class "procedures-list" ]
+        [ h3 [] [ text "Procedures" ]
+        , if List.isEmpty model.procedures then
+            p [] [ text "No procedures found" ]
 
           else
-            viewProceduresTable model.procedures
-        , viewPagination model
-        , case model.createDialog of
-            Just dialog ->
-                viewCreateDialog dialog
-
-            Nothing ->
-                Html.text ""
-        , case model.editDialog of
-            Just dialog ->
-                viewEditDialog dialog
-
-            Nothing ->
-                Html.text ""
-        , case model.versionsDialog of
-            Just dialog ->
-                viewVersionsDialog dialog
-
-            Nothing ->
-                Html.text ""
-        ]
-
-
-viewProceduresTable : List TestProcedure -> Html Msg
-viewProceduresTable procedures =
-    Html.table
-        [ Html.Attributes.class "mdc-data-table__table"
-        , Html.Attributes.style "width" "100%"
-        , Html.Attributes.style "border-collapse" "collapse"
-        ]
-        [ Html.thead []
-            [ Html.tr []
-                [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Name" ]
-                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Description" ]
-                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Version" ]
-                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Steps" ]
-                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Actions" ]
-                ]
-            ]
-        , Html.tbody []
-            (List.map viewProcedureRow procedures)
-        ]
-
-
-viewProcedureRow : TestProcedure -> Html Msg
-viewProcedureRow procedure =
-    Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
-        [ Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text procedure.name ]
-        , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text procedure.description ]
-        , Html.td [ Html.Attributes.style "padding" "12px" ]
-            [ Html.text
-                ("v"
-                    ++ String.fromInt procedure.version
-                    ++ (if procedure.isLatest then
-                            " (latest)"
-
-                        else
-                            ""
-                       )
+            ul []
+                (List.map
+                    (\proc ->
+                        li
+                            [ onClick (SelectProcedure proc)
+                            , class "procedure-item"
+                            ]
+                            [ text proc.name ]
+                    )
+                    model.procedures
                 )
-            ]
-        , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (String.fromInt (List.length procedure.steps)) ]
-        , Html.td [ Html.Attributes.style "padding" "12px" ]
-            [ Html.button
-                [ Html.Events.onClick (SelectProcedure procedure)
-                , Html.Attributes.class "mdc-button"
-                , Html.Attributes.style "margin-right" "8px"
-                ]
-                [ Html.text "View" ]
-            , Html.button
-                [ Html.Events.onClick (OpenEditDialog procedure)
-                , Html.Attributes.class "mdc-button"
-                , Html.Attributes.style "margin-right" "8px"
-                ]
-                [ Html.text "Edit" ]
-            , Html.button
-                [ Html.Events.onClick (CreateVersion procedure.id)
-                , Html.Attributes.class "mdc-button"
-                , Html.Attributes.style "margin-right" "8px"
-                ]
-                [ Html.text "New Version" ]
-            , Html.button
-                [ Html.Events.onClick (OpenVersionsDialog procedure)
-                , Html.Attributes.class "mdc-button"
-                ]
-                [ Html.text "History" ]
-            ]
+        , viewPagination model
         ]
 
 
@@ -495,295 +440,253 @@ viewPagination model =
 
         totalPages =
             (model.total + model.limit - 1) // model.limit
-
-        hasPrev =
-            currentPage > 0
-
-        hasNext =
-            currentPage < totalPages - 1
     in
-    Html.div
-        [ Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "justify-content" "center"
-        , Html.Attributes.style "align-items" "center"
-        , Html.Attributes.style "gap" "10px"
-        , Html.Attributes.style "margin-top" "20px"
-        ]
-        [ Html.button
-            [ Html.Events.onClick (LoadPage ((currentPage - 1) * model.limit))
-            , Html.Attributes.disabled (not hasPrev)
-            , Html.Attributes.class "mdc-button"
+    div [ class "pagination" ]
+        [ button
+            [ onClick (LoadPage (model.offset - model.limit))
+            , disabled (currentPage == 0)
             ]
-            [ Html.text "Previous" ]
-        , Html.span []
-            [ Html.text
-                ("Page "
-                    ++ String.fromInt (currentPage + 1)
-                    ++ " of "
-                    ++ String.fromInt (max 1 totalPages)
+            [ text "Previous" ]
+        , span [] [ text ("Page " ++ String.fromInt (currentPage + 1) ++ " of " ++ String.fromInt totalPages) ]
+        , button
+            [ onClick (LoadPage (model.offset + model.limit))
+            , disabled (currentPage >= totalPages - 1)
+            ]
+            [ text "Next" ]
+        ]
+
+
+viewSelectedProcedure : Model -> Html Msg
+viewSelectedProcedure model =
+    case model.selectedProcedure of
+        Nothing ->
+            div [ class "no-selection" ]
+                [ p [] [ text "Select a procedure to view details" ]
+                ]
+
+        Just procedure ->
+            div [ class "procedure-details" ]
+                [ viewModeSelector model
+                , case model.viewMode of
+                    ViewMode ->
+                        viewModeView model
+
+                    EditMode ->
+                        viewEditMode model
+
+                    NewVersionMode ->
+                        viewNewVersionMode model
+                , viewError model.error
+                ]
+
+
+viewModeSelector : Model -> Html Msg
+viewModeSelector model =
+    div [ class "mode-selector" ]
+        [ button
+            [ onClick SwitchToViewMode
+            , class
+                (if model.viewMode == ViewMode then
+                    "active"
+
+                 else
+                    ""
                 )
             ]
-        , Html.button
-            [ Html.Events.onClick (LoadPage ((currentPage + 1) * model.limit))
-            , Html.Attributes.disabled (not hasNext)
-            , Html.Attributes.class "mdc-button"
+            [ text "View" ]
+        , button
+            [ onClick SwitchToEditMode
+            , class
+                (if model.viewMode == EditMode then
+                    "active"
+
+                 else
+                    ""
+                )
             ]
-            [ Html.text "Next" ]
+            [ text "Edit" ]
+        , button
+            [ onClick SwitchToNewVersionMode
+            , class
+                (if model.viewMode == NewVersionMode then
+                    "active"
+
+                 else
+                    ""
+                )
+            , disabled (model.draftProcedure == model.committedProcedure)
+            ]
+            [ text "New Version" ]
         ]
 
 
-viewCreateDialog : CreateDialogState -> Html Msg
-viewCreateDialog dialog =
-    Components.viewDialogOverlay "Create Test Procedure"
-        [ case dialog.error of
-            Just err ->
-                Html.div
-                    [ Html.Attributes.style "color" "red"
-                    , Html.Attributes.style "background-color" "#ffebee"
-                    , Html.Attributes.style "padding" "12px"
-                    , Html.Attributes.style "border-radius" "4px"
-                    , Html.Attributes.style "margin-bottom" "16px"
-                    , Html.Attributes.style "border" "1px solid #ffcdd2"
-                    ]
-                    [ Html.text err ]
+viewModeView : Model -> Html Msg
+viewModeView model =
+    case ( model.committedProcedure, model.draftProcedure ) of
+        ( Just committed, _ ) ->
+            div [ class "view-mode" ]
+                [ h3 [] [ text committed.name ]
+                , p [] [ text committed.description ]
+                , viewSteps committed.steps
+                ]
 
-            Nothing ->
-                Html.text ""
-        , Components.viewFormField "Name"
-            [ Html.Attributes.type_ "text"
-            , Html.Attributes.value dialog.name
-            , Html.Events.onInput SetCreateName
-            , Html.Attributes.required True
-            ]
-        , Components.viewFormField "Description"
-            [ Html.Attributes.type_ "text"
-            , Html.Attributes.value dialog.description
-            , Html.Events.onInput SetCreateDescription
-            , Html.Attributes.required True
-            ]
-        , Components.viewFormField "Steps (JSON)"
-            [ Html.Attributes.type_ "text"
-            , Html.Attributes.value dialog.stepsJson
-            , Html.Events.onInput SetCreateStepsJson
-            , Html.Attributes.required True
-            ]
-        ]
-        [ Html.button
-            [ Html.Events.onClick CloseCreateDialog
-            , Html.Attributes.class "mdc-button"
-            ]
-            [ Html.text "Cancel" ]
-        , Html.button
-            [ Html.Events.onClick SubmitCreate
-            , Html.Attributes.class "mdc-button mdc-button--raised"
-            ]
-            [ Html.text "Create" ]
-        ]
+        ( Nothing, Just draft ) ->
+            div [ class "view-mode draft-only" ]
+                [ div [ class "draft-banner" ]
+                    [ text "⚠ Draft only - No published version yet" ]
+                , h3 [] [ text draft.name ]
+                , p [] [ text draft.description ]
+                , viewSteps draft.steps
+                ]
+
+        _ ->
+            div [] [ text "Loading..." ]
 
 
-viewEditDialog : EditDialogState -> Html Msg
-viewEditDialog dialog =
-    Components.viewDialogOverlay "Edit Test Procedure"
-        [ case dialog.error of
-            Just err ->
-                Html.div
-                    [ Html.Attributes.style "color" "red"
-                    , Html.Attributes.style "background-color" "#ffebee"
-                    , Html.Attributes.style "padding" "12px"
-                    , Html.Attributes.style "border-radius" "4px"
-                    , Html.Attributes.style "margin-bottom" "16px"
-                    , Html.Attributes.style "border" "1px solid #ffcdd2"
-                    ]
-                    [ Html.text err ]
-
-            Nothing ->
-                Html.text ""
-        , Components.viewFormField "Name"
-            [ Html.Attributes.type_ "text"
-            , Html.Attributes.value dialog.name
-            , Html.Events.onInput SetEditName
-            , Html.Attributes.required True
-            ]
-        , Components.viewFormField "Description"
-            [ Html.Attributes.type_ "text"
-            , Html.Attributes.value dialog.description
-            , Html.Events.onInput SetEditDescription
-            , Html.Attributes.required True
-            ]
-        , Components.viewFormField "Steps (JSON)"
-            [ Html.Attributes.type_ "text"
-            , Html.Attributes.value dialog.stepsJson
-            , Html.Events.onInput SetEditStepsJson
-            , Html.Attributes.required True
-            ]
-        ]
-        [ Html.button
-            [ Html.Events.onClick CloseEditDialog
-            , Html.Attributes.class "mdc-button"
-            ]
-            [ Html.text "Cancel" ]
-        , Html.button
-            [ Html.Events.onClick SubmitEdit
-            , Html.Attributes.class "mdc-button mdc-button--raised"
-            ]
-            [ Html.text "Save" ]
-        ]
-
-
-viewVersionsDialog : VersionsDialogState -> Html Msg
-viewVersionsDialog dialog =
-    Components.viewDialogOverlay ("Version History: " ++ dialog.procedure.name)
-        [ Html.div []
-            [ if List.isEmpty dialog.versions then
-                Html.text "Loading versions..."
-
-              else
-                Html.table
-                    [ Html.Attributes.class "mdc-data-table__table"
-                    , Html.Attributes.style "width" "100%"
-                    , Html.Attributes.style "border-collapse" "collapse"
-                    ]
-                    [ Html.thead []
-                        [ Html.tr []
-                            [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Version" ]
-                            , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Created" ]
-                            , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Steps" ]
-                            ]
-                        ]
-                    , Html.tbody []
-                        (List.map
-                            (\v ->
-                                Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
-                                    [ Html.td [ Html.Attributes.style "padding" "12px" ]
-                                        [ Html.text
-                                            ("v"
-                                                ++ String.fromInt v.version
-                                                ++ (if v.isLatest then
-                                                        " (latest)"
-
-                                                    else
-                                                        ""
-                                                   )
-                                            )
-                                        ]
-                                    , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (formatTime v.createdAt) ]
-                                    , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (String.fromInt (List.length v.steps)) ]
-                                    ]
-                            )
-                            dialog.versions
-                        )
-                    ]
-            ]
-        ]
-        [ Html.button
-            [ Html.Events.onClick CloseVersionsDialog
-            , Html.Attributes.class "mdc-button"
-            ]
-            [ Html.text "Close" ]
-        ]
-
-
-
--- HELPERS
-
-
-httpErrorToString : Http.Error -> String
-httpErrorToString error =
-    case error of
-        Http.BadUrl _ ->
-            "Invalid URL"
-
-        Http.Timeout ->
-            "Request timed out"
-
-        Http.NetworkError ->
-            "Network error"
-
-        Http.BadStatus status ->
-            "Server error: " ++ String.fromInt status
-
-        Http.BadBody body ->
-            "Invalid response: " ++ body
-
-
-formatTime : Time.Posix -> String
-formatTime time =
-    let
-        year =
-            String.fromInt (Time.toYear Time.utc time)
-
-        month =
-            String.fromInt (monthToInt (Time.toMonth Time.utc time))
-
-        day =
-            String.fromInt (Time.toDay Time.utc time)
-    in
-    year ++ "-" ++ String.padLeft 2 '0' month ++ "-" ++ String.padLeft 2 '0' day
-
-
-monthToInt : Time.Month -> Int
-monthToInt month =
-    case month of
-        Time.Jan ->
-            1
-
-        Time.Feb ->
-            2
-
-        Time.Mar ->
-            3
-
-        Time.Apr ->
-            4
-
-        Time.May ->
-            5
-
-        Time.Jun ->
-            6
-
-        Time.Jul ->
-            7
-
-        Time.Aug ->
-            8
-
-        Time.Sep ->
-            9
-
-        Time.Oct ->
-            10
-
-        Time.Nov ->
-            11
-
-        Time.Dec ->
-            12
-
-
--- Decode array of steps from JSON string
-stepsDecoder : Decode.Decoder (List TestStep)
-stepsDecoder =
-    Decode.list testStepDecoder
-
-
--- Parse JSON string to List TestStep
-parseStepsJson : String -> Result Decode.Error (List TestStep)
-parseStepsJson jsonString =
-    let
-        trimmed =
-            String.trim jsonString
-    in
-    if String.isEmpty trimmed then
-        Ok []
+viewSteps : List TestStep -> Html Msg
+viewSteps steps =
+    if List.isEmpty steps then
+        p [ class "no-steps" ] [ text "No steps defined" ]
 
     else
-        Decode.decodeString stepsDecoder trimmed
+        div [ class "steps-list" ]
+            (List.indexedMap
+                (\index step ->
+                    div [ class "step-card" ]
+                        [ h4 [] [ text (String.fromInt (index + 1) ++ ". " ++ step.name) ]
+                        , p [] [ text step.instructions ]
+                        , viewImageGallery step.imagePaths
+                        ]
+                )
+                steps
+            )
 
 
--- Convert list of steps to formatted JSON string
-stepsToJson : List TestStep -> String
-stepsToJson steps =
-    steps
-        |> Encode.list testStepEncoder
-        |> Encode.encode 2
+viewImageGallery : List String -> Html Msg
+viewImageGallery imagePaths =
+    if List.isEmpty imagePaths then
+        text ""
+
+    else
+        div [ class "image-gallery" ]
+            (List.map
+                (\path ->
+                    div [ class "image-item" ]
+                        [ Html.img [ Html.Attributes.src ("/uploads/" ++ path) ] []
+                        ]
+                )
+                imagePaths
+            )
+
+
+viewEditMode : Model -> Html Msg
+viewEditMode model =
+    case model.draftProcedure of
+        Nothing ->
+            div [] [ text "Loading draft..." ]
+
+        Just draft ->
+            div [ class "edit-mode" ]
+                [ h3 [] [ text "Edit Draft" ]
+                , div [ class "editing-steps" ]
+                    (List.indexedMap (viewEditableStep model) model.editingSteps)
+                , button [ onClick AddStep, class "add-step-btn" ] [ text "+ Add Step" ]
+                , div [ class "edit-actions" ]
+                    [ button [ onClick SaveDraft ] [ text "Save Draft" ]
+                    , button [ onClick ClearChanges ] [ text "Clear Changes" ]
+                    , button [ onClick SwitchToViewMode ] [ text "Done Editing" ]
+                    ]
+                ]
+
+
+viewEditableStep : Model -> Int -> TestStep -> Html Msg
+viewEditableStep model index step =
+    div [ class "editable-step" ]
+        [ input
+            [ type_ "text"
+            , placeholder "Step name"
+            , value step.name
+            , onInput (UpdateStepName index)
+            , class "step-name-input"
+            ]
+            []
+        , textarea
+            [ placeholder "Instructions"
+            , value step.instructions
+            , onInput (UpdateStepInstructions index)
+            , class "step-instructions-input"
+            ]
+            []
+        , div [ class "image-upload-zone" ]
+            [ input
+                [ type_ "file"
+                , Html.Attributes.accept "image/*"
+                , on "change" (Decode.map (ImageSelected index) fileDecoder)
+                ]
+                []
+            , if Dict.member index model.uploadingImages then
+                span [ class "uploading" ] [ text "Uploading..." ]
+
+              else
+                text ""
+            ]
+        , div [ class "step-images" ]
+            (List.indexedMap
+                (\imgIdx path ->
+                    div [ class "step-image-item" ]
+                        [ Html.img [ Html.Attributes.src ("/uploads/" ++ path), style "max-width" "100px" ] []
+                        , button [ onClick (RemoveStepImage index imgIdx), class "remove-image-btn" ] [ text "×" ]
+                        ]
+                )
+                step.imagePaths
+            )
+        , button [ onClick (RemoveStep index), class "remove-step-btn" ] [ text "Delete Step" ]
+        ]
+
+
+fileDecoder : Decode.Decoder File
+fileDecoder =
+    Decode.at [ "target", "files", "0" ] File.decoder
+
+
+viewNewVersionMode : Model -> Html Msg
+viewNewVersionMode model =
+    div [ class "new-version-mode" ]
+        [ h3 [] [ text "Review Changes" ]
+        , div [ class "diff-view" ]
+            [ div [ class "diff-column" ]
+                [ h4 [] [ text "Current Version" ]
+                , case model.committedProcedure of
+                    Just committed ->
+                        viewSteps committed.steps
+
+                    Nothing ->
+                        p [] [ text "No published version" ]
+                ]
+            , div [ class "diff-column" ]
+                [ h4 [] [ text "Draft Changes" ]
+                , case model.draftProcedure of
+                    Just draft ->
+                        viewSteps draft.steps
+
+                    Nothing ->
+                        p [] [ text "No draft" ]
+                ]
+            ]
+        , div [ class "version-actions" ]
+            [ button [ onClick SwitchToViewMode ] [ text "Cancel" ]
+            , button [ onClick CommitVersion, class "commit-btn" ] [ text "Create New Version" ]
+            ]
+        ]
+
+
+viewError : Maybe String -> Html Msg
+viewError maybeError =
+    case maybeError of
+        Nothing ->
+            text ""
+
+        Just errorMsg ->
+            div [ class "error-message" ]
+                [ text errorMsg
+                ]

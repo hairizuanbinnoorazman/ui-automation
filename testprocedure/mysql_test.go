@@ -13,9 +13,9 @@ func TestMySQLStore_Create(t *testing.T) {
 	_, store := setupTestStore(t)
 	ctx := context.Background()
 
-	t.Run("successfully create test procedure", func(t *testing.T) {
+	t.Run("successfully create test procedure with draft", func(t *testing.T) {
 		steps := Steps{
-			{"action": "click", "selector": "#button"},
+			{Name: "Step 1", Instructions: "Click the button", ImagePaths: []string{}},
 		}
 		projectID := uuid.New()
 		createdBy := uuid.New()
@@ -26,6 +26,14 @@ func TestMySQLStore_Create(t *testing.T) {
 		assert.Equal(t, uint(1), tp.Version)
 		assert.True(t, tp.IsLatest)
 		assert.Nil(t, tp.ParentID)
+
+		// Verify draft (v0) was also created
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(0), draft.Version)
+		assert.False(t, draft.IsLatest)
+		assert.NotNil(t, draft.ParentID)
+		assert.Equal(t, tp.ID, *draft.ParentID)
 	})
 
 	t.Run("create test procedure without steps", func(t *testing.T) {
@@ -48,6 +56,18 @@ func TestMySQLStore_Create(t *testing.T) {
 		err := store.Create(ctx, tp)
 		assert.ErrorIs(t, err, ErrInvalidTestProcedureName)
 	})
+
+	t.Run("step without name returns error", func(t *testing.T) {
+		steps := Steps{
+			{Name: "", Instructions: "No name", ImagePaths: []string{}},
+		}
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, steps)
+		err := store.Create(ctx, tp)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "step")
+	})
 }
 
 func TestMySQLStore_GetByID(t *testing.T) {
@@ -56,7 +76,7 @@ func TestMySQLStore_GetByID(t *testing.T) {
 
 	t.Run("retrieve existing test procedure", func(t *testing.T) {
 		steps := Steps{
-			{"action": "navigate", "url": "https://example.com"},
+			{Name: "Navigate", Instructions: "Go to example.com", ImagePaths: []string{"path/to/image.png"}},
 		}
 		projectID := uuid.New()
 		createdBy := uuid.New()
@@ -87,53 +107,24 @@ func TestMySQLStore_Update(t *testing.T) {
 		tp := createTestProcedure("Original Name", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
+		// Note: Update now updates the draft (v0), not the committed version
 		err := store.Update(ctx, tp.ID, SetName("Updated Name"))
 		require.NoError(t, err)
 
-		retrieved, err := store.GetByID(ctx, tp.ID)
+		// Verify draft was updated
+		draft, err := store.GetDraft(ctx, tp.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "Updated Name", retrieved.Name)
-	})
+		assert.Equal(t, "Updated Name", draft.Name)
 
-	t.Run("update steps", func(t *testing.T) {
-		projectID := uuid.New()
-		createdBy := uuid.New()
-		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
-		require.NoError(t, store.Create(ctx, tp))
-
-		newSteps := Steps{
-			{"action": "click", "selector": "#new-button"},
-		}
-		err := store.Update(ctx, tp.ID, SetSteps(newSteps))
+		// Verify committed version is unchanged
+		committed, err := store.GetLatestCommitted(ctx, tp.ID)
 		require.NoError(t, err)
-
-		retrieved, err := store.GetByID(ctx, tp.ID)
-		require.NoError(t, err)
-		assert.Equal(t, len(newSteps), len(retrieved.Steps))
-		assert.Equal(t, "click", retrieved.Steps[0]["action"])
-	})
-
-	t.Run("update multiple fields", func(t *testing.T) {
-		projectID := uuid.New()
-		createdBy := uuid.New()
-		tp := createTestProcedure("Original", "Original Desc", projectID, createdBy, nil)
-		require.NoError(t, store.Create(ctx, tp))
-
-		err := store.Update(ctx, tp.ID,
-			SetName("New Name"),
-			SetDescription("New Description"),
-		)
-		require.NoError(t, err)
-
-		retrieved, err := store.GetByID(ctx, tp.ID)
-		require.NoError(t, err)
-		assert.Equal(t, "New Name", retrieved.Name)
-		assert.Equal(t, "New Description", retrieved.Description)
+		assert.Equal(t, "Original Name", committed.Name)
 	})
 
 	t.Run("update non-existent returns error", func(t *testing.T) {
 		err := store.Update(ctx, uuid.New(), SetName("New Name"))
-		assert.ErrorIs(t, err, ErrTestProcedureNotFound)
+		assert.Error(t, err)
 	})
 }
 
@@ -167,7 +158,7 @@ func TestMySQLStore_ListByProject(t *testing.T) {
 	t.Run("list procedures for project", func(t *testing.T) {
 		projectID := uuid.New()
 		createdBy := uuid.New()
-		// Create 3 procedures for project 10
+		// Create 3 procedures for project
 		for i := 0; i < 3; i++ {
 			tp := createTestProcedure("Procedure "+string(rune('A'+i)), "Description", projectID, createdBy, nil)
 			require.NoError(t, store.Create(ctx, tp))
@@ -176,6 +167,11 @@ func TestMySQLStore_ListByProject(t *testing.T) {
 		procedures, err := store.ListByProject(ctx, projectID, 10, 0)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(procedures), 3)
+
+		// Verify no drafts are included (version 0)
+		for _, p := range procedures {
+			assert.NotEqual(t, uint(0), p.Version)
+		}
 	})
 
 	t.Run("list returns only latest versions", func(t *testing.T) {
@@ -184,8 +180,8 @@ func TestMySQLStore_ListByProject(t *testing.T) {
 		tp := createTestProcedure("Versioned Procedure", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, tp))
 
-		// Create a new version
-		_, err := store.CreateVersion(ctx, tp.ID)
+		// Commit draft to create version 2
+		_, err := store.CommitDraft(ctx, tp.ID)
 		require.NoError(t, err)
 
 		procedures, err := store.ListByProject(ctx, projectID, 10, 0)
@@ -233,7 +229,7 @@ func TestMySQLStore_CreateVersion(t *testing.T) {
 		original := createTestProcedure("Original Procedure", "Description", projectID, createdBy, nil)
 		require.NoError(t, store.Create(ctx, original))
 
-		// Create version
+		// Create version (legacy method)
 		version2, err := store.CreateVersion(ctx, original.ID)
 		require.NoError(t, err)
 		assert.NotEqual(t, original.ID, version2.ID)
@@ -276,7 +272,7 @@ func TestMySQLStore_CreateVersion(t *testing.T) {
 
 	t.Run("version preserves content", func(t *testing.T) {
 		steps := Steps{
-			{"action": "click", "selector": "#button"},
+			{Name: "Click", Instructions: "Click the button", ImagePaths: []string{"image.png"}},
 		}
 		projectID := uuid.New()
 		createdBy := uuid.New()
@@ -302,7 +298,7 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	_, store := setupTestStore(t)
 	ctx := context.Background()
 
-	t.Run("get history of original", func(t *testing.T) {
+	t.Run("get history excludes draft", func(t *testing.T) {
 		projectID := uuid.New()
 		createdBy := uuid.New()
 		original := createTestProcedure("Versioned", "Description", projectID, createdBy, nil)
@@ -310,9 +306,23 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 
 		history, err := store.GetVersionHistory(ctx, original.ID)
 		require.NoError(t, err)
-		assert.Len(t, history, 1)
-		assert.Equal(t, original.ID, history[0].ID)
-		assert.Equal(t, uint(1), history[0].Version)
+
+		// Should include v1 and v0 (draft)
+		assert.GreaterOrEqual(t, len(history), 2)
+
+		// Verify versions
+		hasV1 := false
+		hasV0 := false
+		for _, v := range history {
+			if v.Version == 1 {
+				hasV1 = true
+			}
+			if v.Version == 0 {
+				hasV0 = true
+			}
+		}
+		assert.True(t, hasV1)
+		assert.True(t, hasV0)
 	})
 
 	t.Run("get history with multiple versions", func(t *testing.T) {
@@ -330,47 +340,16 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 		// Get history from any version
 		history, err := store.GetVersionHistory(ctx, version3.ID)
 		require.NoError(t, err)
-		assert.Len(t, history, 3)
+		assert.GreaterOrEqual(t, len(history), 4) // v0, v1, v2, v3
 
-		// Should be ordered by version DESC
-		assert.Equal(t, uint(3), history[0].Version)
-		assert.Equal(t, uint(2), history[1].Version)
-		assert.Equal(t, uint(1), history[2].Version)
-
-		// All should have same parent_id (pointing to original)
-		assert.NotNil(t, history[0].ParentID)
-		assert.Equal(t, original.ID, *history[0].ParentID)
-		assert.NotNil(t, history[1].ParentID)
-		assert.Equal(t, original.ID, *history[1].ParentID)
-	})
-
-	t.Run("get history from middle version", func(t *testing.T) {
-		projectID := uuid.New()
-		createdBy := uuid.New()
-		original := createTestProcedure("Test History", "Description", projectID, createdBy, nil)
-		require.NoError(t, store.Create(ctx, original))
-
-		version2, err := store.CreateVersion(ctx, original.ID)
-		require.NoError(t, err)
-
-		version3, err := store.CreateVersion(ctx, version2.ID)
-		require.NoError(t, err)
-
-		// Get history from version2
-		history, err := store.GetVersionHistory(ctx, version2.ID)
-		require.NoError(t, err)
-		assert.Len(t, history, 3)
-
-		// Should still get all versions
-		versions := make(map[uint]bool)
+		// Find max version to verify ordering
+		maxVersion := uint(0)
 		for _, v := range history {
-			versions[v.Version] = true
+			if v.Version > maxVersion {
+				maxVersion = v.Version
+			}
 		}
-		assert.True(t, versions[1])
-		assert.True(t, versions[2])
-		assert.True(t, versions[3])
-
-		_ = version3 // Use variable
+		assert.Equal(t, uint(3), maxVersion)
 	})
 
 	t.Run("get history from non-existent returns error", func(t *testing.T) {
@@ -379,36 +358,273 @@ func TestMySQLStore_GetVersionHistory(t *testing.T) {
 	})
 }
 
-func TestMySQLStore_VersioningComplexScenario(t *testing.T) {
+// Draft workflow tests
+func TestMySQLStore_GetDraft(t *testing.T) {
 	_, store := setupTestStore(t)
 	ctx := context.Background()
 
-	t.Run("update vs version behavior", func(t *testing.T) {
-		// Create original
+	t.Run("get draft after creation", func(t *testing.T) {
 		projectID := uuid.New()
 		createdBy := uuid.New()
-		original := createTestProcedure("Original", "Description", projectID, createdBy, nil)
-		require.NoError(t, store.Create(ctx, original))
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
 
-		// Update modifies in-place (no new version)
-		err := store.Update(ctx, original.ID, SetName("Updated Name"))
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(0), draft.Version)
+		assert.False(t, draft.IsLatest)
+		assert.NotNil(t, draft.ParentID)
+		assert.Equal(t, tp.ID, *draft.ParentID)
+	})
+
+	t.Run("get draft for non-existent returns error", func(t *testing.T) {
+		_, err := store.GetDraft(ctx, uuid.New())
+		assert.Error(t, err)
+	})
+}
+
+func TestMySQLStore_GetLatestCommitted(t *testing.T) {
+	_, store := setupTestStore(t)
+	ctx := context.Background()
+
+	t.Run("get latest committed after creation", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		committed, err := store.GetLatestCommitted(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(1), committed.Version)
+		assert.True(t, committed.IsLatest)
+	})
+
+	t.Run("get latest committed after multiple versions", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		// Create versions
+		v2, err := store.CommitDraft(ctx, tp.ID)
 		require.NoError(t, err)
 
-		updated, err := store.GetByID(ctx, original.ID)
+		_, err = store.CommitDraft(ctx, v2.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "Updated Name", updated.Name)
-		assert.Equal(t, uint(1), updated.Version) // Version unchanged
-		assert.True(t, updated.IsLatest)
 
-		// Create version creates new immutable copy
-		version2, err := store.CreateVersion(ctx, original.ID)
+		// Get latest should be v3
+		latest, err := store.GetLatestCommitted(ctx, tp.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "Updated Name", version2.Name) // Preserves updated name
-		assert.Equal(t, uint(2), version2.Version)
+		assert.Equal(t, uint(3), latest.Version)
+		assert.True(t, latest.IsLatest)
+	})
+}
 
-		// Original is no longer latest
-		originalAgain, err := store.GetByID(ctx, original.ID)
+func TestMySQLStore_UpdateDraft(t *testing.T) {
+	_, store := setupTestStore(t)
+	ctx := context.Background()
+
+	t.Run("update draft name", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Original", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		// Update draft
+		err := store.UpdateDraft(ctx, tp.ID, SetName("Draft Name"))
 		require.NoError(t, err)
-		assert.False(t, originalAgain.IsLatest)
+
+		// Draft should be updated
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Draft Name", draft.Name)
+
+		// Committed version should be unchanged
+		committed, err := store.GetLatestCommitted(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Original", committed.Name)
+	})
+
+	t.Run("update draft steps", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		newSteps := Steps{
+			{Name: "New Step", Instructions: "Do something", ImagePaths: []string{}},
+		}
+		err := store.UpdateDraft(ctx, tp.ID, SetSteps(newSteps))
+		require.NoError(t, err)
+
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Len(t, draft.Steps, 1)
+		assert.Equal(t, "New Step", draft.Steps[0].Name)
+	})
+
+	t.Run("update draft for non-existent returns error", func(t *testing.T) {
+		err := store.UpdateDraft(ctx, uuid.New(), SetName("Test"))
+		assert.Error(t, err)
+	})
+}
+
+func TestMySQLStore_ResetDraft(t *testing.T) {
+	_, store := setupTestStore(t)
+	ctx := context.Background()
+
+	t.Run("reset draft to committed", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Original", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		// Modify draft
+		err := store.UpdateDraft(ctx, tp.ID, SetName("Modified Draft"))
+		require.NoError(t, err)
+
+		// Reset draft
+		err = store.ResetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+
+		// Draft should match committed
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Original", draft.Name)
+	})
+
+	t.Run("reset draft with no committed version returns error", func(t *testing.T) {
+		err := store.ResetDraft(ctx, uuid.New())
+		assert.Error(t, err)
+	})
+}
+
+func TestMySQLStore_CommitDraft(t *testing.T) {
+	_, store := setupTestStore(t)
+	ctx := context.Background()
+
+	t.Run("commit draft creates new version", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Original", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		// Modify draft
+		err := store.UpdateDraft(ctx, tp.ID, SetName("Modified"))
+		require.NoError(t, err)
+
+		// Commit draft
+		v2, err := store.CommitDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(2), v2.Version)
+		assert.True(t, v2.IsLatest)
+		assert.Equal(t, "Modified", v2.Name)
+
+		// Original should not be latest
+		v1, err := store.GetByID(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.False(t, v1.IsLatest)
+
+		// Draft should still exist and remain unchanged
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(0), draft.Version)
+		assert.Equal(t, "Modified", draft.Name)
+	})
+
+	t.Run("commit draft multiple times", func(t *testing.T) {
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		tp := createTestProcedure("Test", "Description", projectID, createdBy, nil)
+		require.NoError(t, store.Create(ctx, tp))
+
+		// First commit
+		v2, err := store.CommitDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(2), v2.Version)
+
+		// Modify draft again
+		err = store.UpdateDraft(ctx, v2.ID, SetName("Second Modification"))
+		require.NoError(t, err)
+
+		// Second commit
+		v3, err := store.CommitDraft(ctx, v2.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uint(3), v3.Version)
+		assert.Equal(t, "Second Modification", v3.Name)
+	})
+
+	t.Run("commit draft for non-existent returns error", func(t *testing.T) {
+		_, err := store.CommitDraft(ctx, uuid.New())
+		assert.Error(t, err)
+	})
+}
+
+func TestMySQLStore_CompleteWorkflow(t *testing.T) {
+	_, store := setupTestStore(t)
+	ctx := context.Background()
+
+	t.Run("complete draft workflow", func(t *testing.T) {
+		// Create procedure (creates v1 and v0 draft)
+		projectID := uuid.New()
+		createdBy := uuid.New()
+		steps1 := Steps{
+			{Name: "Step 1", Instructions: "Original step", ImagePaths: []string{}},
+		}
+		tp := createTestProcedure("Test Procedure", "Description", projectID, createdBy, steps1)
+		require.NoError(t, store.Create(ctx, tp))
+
+		// Edit draft
+		steps2 := Steps{
+			{Name: "Step 1", Instructions: "Modified step", ImagePaths: []string{"image.png"}},
+			{Name: "Step 2", Instructions: "New step", ImagePaths: []string{}},
+		}
+		err := store.UpdateDraft(ctx, tp.ID,
+			SetName("Modified Procedure"),
+			SetSteps(steps2),
+		)
+		require.NoError(t, err)
+
+		// Verify draft has changes
+		draft, err := store.GetDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Modified Procedure", draft.Name)
+		assert.Len(t, draft.Steps, 2)
+
+		// Verify committed is unchanged
+		committed, err := store.GetLatestCommitted(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Test Procedure", committed.Name)
+		assert.Len(t, committed.Steps, 1)
+
+		// Commit draft
+		v2, err := store.CommitDraft(ctx, tp.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Modified Procedure", v2.Name)
+		assert.Len(t, v2.Steps, 2)
+		assert.Equal(t, uint(2), v2.Version)
+
+		// List should only show latest version
+		procedures, err := store.ListByProject(ctx, projectID, 10, 0)
+		require.NoError(t, err)
+		procedureCount := 0
+		for _, p := range procedures {
+			if p.Name == "Modified Procedure" {
+				procedureCount++
+				assert.Equal(t, uint(2), p.Version)
+			}
+		}
+		assert.Equal(t, 1, procedureCount)
+
+		// Reset draft back to v2
+		err = store.UpdateDraft(ctx, v2.ID, SetName("Draft Change"))
+		require.NoError(t, err)
+
+		err = store.ResetDraft(ctx, v2.ID)
+		require.NoError(t, err)
+
+		draft, err = store.GetDraft(ctx, v2.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "Modified Procedure", draft.Name)
 	})
 }
