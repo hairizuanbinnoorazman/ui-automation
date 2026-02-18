@@ -9,7 +9,7 @@ import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Time
-import Types exposing (PaginatedResponse, TestProcedure, TestProcedureInput, TestStep)
+import Types exposing (PaginatedResponse, TestProcedure, TestProcedureInput, TestStep, testStepDecoder, testStepEncoder)
 
 
 
@@ -729,21 +729,10 @@ monthToInt month =
             12
 
 
--- Decode a single test step from JSON
-stepDecoder : Decode.Decoder TestStep
-stepDecoder =
-    Decode.map5 TestStep
-        (Decode.field "action" Decode.string)
-        (Decode.maybe (Decode.field "selector" Decode.string))
-        (Decode.maybe (Decode.field "url" Decode.string))
-        (Decode.maybe (Decode.field "value" Decode.string))
-        (Decode.maybe (Decode.field "endpoint" Decode.string))
-
-
 -- Decode array of steps from JSON string
 stepsDecoder : Decode.Decoder (List TestStep)
 stepsDecoder =
-    Decode.list stepDecoder
+    Decode.list testStepDecoder
 
 
 -- Parse JSON string to List TestStep
@@ -760,27 +749,9 @@ parseStepsJson jsonString =
         Decode.decodeString stepsDecoder trimmed
 
 
--- Encode a single test step to JSON Value
-encodeStep : TestStep -> Encode.Value
-encodeStep step =
-    let
-        requiredFields =
-            [ ( "action", Encode.string step.action ) ]
-
-        optionalFields =
-            [ step.selector |> Maybe.map (\s -> ( "selector", Encode.string s ))
-            , step.url |> Maybe.map (\u -> ( "url", Encode.string u ))
-            , step.value |> Maybe.map (\v -> ( "value", Encode.string v ))
-            , step.endpoint |> Maybe.map (\e -> ( "endpoint", Encode.string e ))
-            ]
-                |> List.filterMap identity
-    in
-    Encode.object (requiredFields ++ optionalFields)
-
-
 -- Convert list of steps to formatted JSON string
 stepsToJson : List TestStep -> String
 stepsToJson steps =
     steps
-        |> Encode.list encodeStep
+        |> Encode.list testStepEncoder
         |> Encode.encode 2
