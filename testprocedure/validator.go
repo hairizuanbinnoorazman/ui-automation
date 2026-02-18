@@ -214,22 +214,20 @@ func checkSuspiciousPatterns(tp *TestProcedure) error {
 		"</requirements>",
 		"<test_procedure>",
 		"<requirements>",
+		"</test_steps>",
+		"<test_steps>",
+		"</name>",
+		"</description>",
 	}
 
 	// Check name
-	nameLower := strings.ToLower(tp.Name)
-	for _, pattern := range suspiciousPatterns {
-		if strings.Contains(nameLower, pattern) {
-			return fmt.Errorf("%w: name contains suspicious pattern '%s'", ErrSuspiciousContent, pattern)
-		}
+	if err := checkStringForSuspiciousPatterns(tp.Name, "name", suspiciousPatterns); err != nil {
+		return err
 	}
 
 	// Check description
-	descLower := strings.ToLower(tp.Description)
-	for _, pattern := range suspiciousPatterns {
-		if strings.Contains(descLower, pattern) {
-			return fmt.Errorf("%w: description contains suspicious pattern '%s'", ErrSuspiciousContent, pattern)
-		}
+	if err := checkStringForSuspiciousPatterns(tp.Description, "description", suspiciousPatterns); err != nil {
+		return err
 	}
 
 	// Check for excessive control characters (potential encoding attacks)
@@ -237,6 +235,37 @@ func checkSuspiciousPatterns(tp *TestProcedure) error {
 		return fmt.Errorf("%w: content contains excessive control characters", ErrSuspiciousContent)
 	}
 
+	// Check all string fields within steps
+	if tp.Steps != nil {
+		for i, step := range tp.Steps {
+			// Check all string values in the step
+			for key, value := range step {
+				if strValue, ok := value.(string); ok {
+					fieldName := fmt.Sprintf("step[%d].%s", i, key)
+					if err := checkStringForSuspiciousPatterns(strValue, fieldName, suspiciousPatterns); err != nil {
+						return err
+					}
+
+					// Check for excessive control characters in step string fields
+					if hasExcessiveControlCharacters(strValue) {
+						return fmt.Errorf("%w: %s contains excessive control characters", ErrSuspiciousContent, fieldName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// checkStringForSuspiciousPatterns checks a string value against a list of suspicious patterns.
+func checkStringForSuspiciousPatterns(value, fieldName string, patterns []string) error {
+	valueLower := strings.ToLower(value)
+	for _, pattern := range patterns {
+		if strings.Contains(valueLower, pattern) {
+			return fmt.Errorf("%w: %s contains suspicious pattern '%s'", ErrSuspiciousContent, fieldName, pattern)
+		}
+	}
 	return nil
 }
 
