@@ -27,5 +27,7 @@ type Store interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-// UpdateSetter is a function that applies an update to a GeneratedScript.
-type UpdateSetter func(*GeneratedScript) error
+// UpdateSetter returns the column-value pairs to apply in a partial UPDATE.
+// Using a map avoids a read-modify-write: the caller never needs to fetch
+// the full row before writing.
+type UpdateSetter func() map[string]interface{}

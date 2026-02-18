@@ -125,27 +125,32 @@ func (s *MySQLStore) ListByProcedure(ctx context.Context, procedureID uuid.UUID)
 }
 
 // Update updates a script with the given setters.
+// Each setter contributes a set of column-value pairs; all are merged into a
+// single UPDATE statement so no prior SELECT is needed and concurrent writes
+// to different columns cannot overwrite each other.
 func (s *MySQLStore) Update(ctx context.Context, id uuid.UUID, setters ...UpdateSetter) error {
-	// First, fetch the script
-	script, err := s.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	// Apply all setters
+	columns := make(map[string]interface{})
 	for _, setter := range setters {
-		if err := setter(script); err != nil {
-			return err
+		for k, v := range setter() {
+			columns[k] = v
 		}
 	}
 
-	// Save the updated script
-	if err := s.db.WithContext(ctx).Save(script).Error; err != nil {
+	result := s.db.WithContext(ctx).
+		Model(&GeneratedScript{}).
+		Where("id = ?", id).
+		Updates(columns)
+
+	if result.Error != nil {
 		s.logger.Error(ctx, "failed to update script", map[string]interface{}{
-			"error":     err.Error(),
+			"error":     result.Error.Error(),
 			"script_id": id.String(),
 		})
-		return err
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return ErrScriptNotFound
 	}
 
 	s.logger.Info(ctx, "script updated", map[string]interface{}{
