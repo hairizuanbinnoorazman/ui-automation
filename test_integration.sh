@@ -38,6 +38,12 @@ LOGIN_RESPONSE=$(curl -s -X POST $BASE_URL/api/v1/auth/login \
 echo "Login response: $LOGIN_RESPONSE"
 echo
 
+# 2b. Validate session with /auth/me
+echo "2b. Validating session with /auth/me..."
+ME_RESPONSE=$(curl -s -X GET $BASE_URL/api/v1/auth/me -b $COOKIES)
+echo "Me response: $ME_RESPONSE"
+echo
+
 # 3. Create project
 echo "3. Creating project..."
 PROJECT_RESPONSE=$(curl -s -X POST $BASE_URL/api/v1/projects \
