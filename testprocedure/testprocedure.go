@@ -84,7 +84,7 @@ type TestProcedure struct {
 	Steps       Steps      `json:"steps" gorm:"type:json"`
 	CreatedBy   uuid.UUID  `json:"created_by" gorm:"type:char(36);not null;index:idx_created_by"`
 	Version     uint       `json:"version" gorm:"not null;default:0;index:idx_version"`
-	IsLatest    bool       `json:"is_latest" gorm:"not null;index:idx_is_latest"`
+	IsLatest    bool       `json:"is_latest" gorm:"not null;default:false;index:idx_is_latest"`
 	ParentID    *uuid.UUID `json:"parent_id,omitempty" gorm:"type:char(36);index:idx_parent_id"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`

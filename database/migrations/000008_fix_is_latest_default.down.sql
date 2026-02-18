@@ -1,0 +1,2 @@
+ALTER TABLE test_procedures
+    MODIFY COLUMN is_latest BOOLEAN DEFAULT TRUE;

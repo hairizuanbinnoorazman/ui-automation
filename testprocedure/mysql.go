@@ -348,8 +348,7 @@ func (s *MySQLStore) CreateWithDraft(ctx context.Context, tp *TestProcedure) (*T
 			ParentID:    &v1.ID,
 		}
 
-		// Use Select to ensure IsLatest is set to false (override GORM default)
-		if err := tx.WithContext(ctx).Select("*").Create(v0).Error; err != nil {
+		if err := tx.WithContext(ctx).Create(v0).Error; err != nil {
 			return fmt.Errorf("failed to create draft version: %w", err)
 		}
 
