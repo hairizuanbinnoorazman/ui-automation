@@ -4,7 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"strconv"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -113,7 +113,7 @@ func (tp *TestProcedure) Validate() error {
 	// Validate steps: ensure all step names are non-empty
 	for i, step := range tp.Steps {
 		if step.Name == "" {
-			return errors.New("step " + strconv.Itoa(i+1) + ": " + ErrInvalidStepName.Error())
+			return fmt.Errorf("step %d: %w", i+1, ErrInvalidStepName)
 		}
 	}
 	return nil

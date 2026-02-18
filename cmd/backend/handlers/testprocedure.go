@@ -604,6 +604,10 @@ func (h *TestProcedureHandler) CommitDraft(w http.ResponseWriter, r *http.Reques
 			respondError(w, http.StatusNotFound, "test procedure not found")
 			return
 		}
+		if errors.Is(err, testprocedure.ErrInvalidStepName) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		h.logger.Error(r.Context(), "failed to commit draft", map[string]interface{}{
 			"error":             err.Error(),
 			"test_procedure_id": id,

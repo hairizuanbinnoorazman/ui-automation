@@ -123,6 +123,7 @@ update msg model =
                 , committedProcedure = Nothing
                 , draftLoading = True
                 , committedLoading = True
+                , error = Nothing
               }
             , Cmd.batch
                 [ API.getTestProcedure model.projectId procedure.id True DraftResponse
@@ -131,7 +132,7 @@ update msg model =
             )
 
         SwitchToViewMode ->
-            ( { model | viewMode = ViewMode }, Cmd.none )
+            ( { model | viewMode = ViewMode, error = Nothing }, Cmd.none )
 
         SwitchToEditMode ->
             case model.draftProcedure of
@@ -139,6 +140,7 @@ update msg model =
                     ( { model
                         | viewMode = EditMode
                         , editingSteps = draft.steps
+                        , error = Nothing
                       }
                     , Cmd.none
                     )
@@ -149,7 +151,7 @@ update msg model =
         SwitchToNewVersionMode ->
             case model.selectedProcedure of
                 Just procedure ->
-                    ( { model | viewMode = NewVersionMode, loading = True }
+                    ( { model | viewMode = NewVersionMode, loading = True, error = Nothing }
                     , API.getDraftDiff procedure.id DiffResponse
                     )
 
@@ -328,7 +330,7 @@ update msg model =
                                     , steps = model.editingSteps
                                     }
                             in
-                            ( { model | loading = True }
+                            ( { model | loading = True, error = Nothing }
                             , API.updateTestProcedure model.projectId procedure.id input DraftSaved
                             )
 
@@ -357,7 +359,7 @@ update msg model =
         ClearChanges ->
             case model.selectedProcedure of
                 Just procedure ->
-                    ( { model | loading = True }
+                    ( { model | loading = True, error = Nothing }
                     , API.resetDraft procedure.id DraftReset
                     )
 
@@ -367,7 +369,7 @@ update msg model =
         DraftReset result ->
             case result of
                 Ok () ->
-                    update LoadDraftAndCommitted model
+                    update LoadDraftAndCommitted { model | error = Nothing }
 
                 Err _ ->
                     ( { model | error = Just "Failed to reset draft", loading = False }
@@ -377,7 +379,7 @@ update msg model =
         CommitVersion ->
             case model.selectedProcedure of
                 Just procedure ->
-                    ( { model | loading = True }
+                    ( { model | loading = True, error = Nothing }
                     , API.commitDraft procedure.id VersionCommitted
                     )
 
@@ -391,6 +393,7 @@ update msg model =
                         | committedProcedure = Just newVersion
                         , viewMode = ViewMode
                         , loading = False
+                        , error = Nothing
                       }
                     , API.getTestProcedures model.projectId model.limit model.offset ProceduresResponse
                     )
