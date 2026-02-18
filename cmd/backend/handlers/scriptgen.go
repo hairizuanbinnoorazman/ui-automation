@@ -361,10 +361,7 @@ func (h *ScriptGenHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, ListScriptsResponse{
-		Scripts: scripts,
-		Total:   len(scripts),
-	})
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(scripts, len(scripts), 0, 0))
 }
 
 // GetByID handles retrieving a script by its ID.
