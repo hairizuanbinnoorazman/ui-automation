@@ -529,7 +529,6 @@ viewTopAppBar model =
                         , Html.Attributes.style "padding" "6px 12px"
                         , Html.Attributes.style "display" "flex"
                         , Html.Attributes.style "align-items" "center"
-                        , Html.Attributes.style "transition" "background 0.2s"
                         ]
                         [ Html.text "Logout" ]
                     ]
