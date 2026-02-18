@@ -141,6 +141,13 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify user owns the procedure's project BEFORE checking for existing scripts
+	procedure, ok := h.verifyProcedureOwnership(w, ctx, procedureID, userID)
+	if !ok {
+		// Helper already logged and responded with appropriate error
+		return
+	}
+
 	// Check if script already exists
 	existingScript, err := h.scriptStore.GetByProcedureAndFramework(ctx, procedureID, req.Framework)
 	if err == nil {
@@ -162,13 +169,6 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			"framework":         req.Framework,
 		})
 		respondError(w, http.StatusInternalServerError, "failed to check existing script")
-		return
-	}
-
-	// Verify user owns the procedure's project
-	procedure, ok := h.verifyProcedureOwnership(w, ctx, procedureID, userID)
-	if !ok {
-		// Helper already logged and responded with appropriate error
 		return
 	}
 
