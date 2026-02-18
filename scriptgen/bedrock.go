@@ -109,6 +109,11 @@ func (g *BedrockGenerator) Generate(ctx context.Context, procedure *testprocedur
 		return nil, fmt.Errorf("no content in response")
 	}
 
+	// Reject truncated output — an incomplete Python file is worse than no file.
+	if response.StopReason == "max_tokens" {
+		return nil, fmt.Errorf("script generation truncated (stop_reason: max_tokens): increase max_tokens or reduce procedure size")
+	}
+
 	generatedCode := strings.TrimSpace(response.Content[0].Text)
 	if generatedCode == "" {
 		return nil, fmt.Errorf("empty generated code")
