@@ -69,10 +69,20 @@ func (s *MySQLStore) Update(ctx context.Context, id uuid.UUID, setters ...Update
 	return s.UpdateDraft(ctx, id, setters...)
 }
 
-// Delete deletes a test procedure (hard delete due to CASCADE).
+// Delete deletes all versions of a test procedure chain (hard delete due to CASCADE).
 func (s *MySQLStore) Delete(ctx context.Context, id uuid.UUID) error {
+	proc, err := s.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	rootID := id
+	if proc.ParentID != nil {
+		rootID = *proc.ParentID
+	}
+
 	result := s.db.WithContext(ctx).
-		Where("id = ?", id).
+		Where("id = ? OR parent_id = ?", rootID, rootID).
 		Delete(&TestProcedure{})
 
 	if result.Error != nil {
@@ -89,6 +99,7 @@ func (s *MySQLStore) Delete(ctx context.Context, id uuid.UUID) error {
 
 	s.logger.Info(ctx, "test procedure deleted", map[string]interface{}{
 		"test_procedure_id": id.String(),
+		"root_id":           rootID.String(),
 	})
 
 	return nil
