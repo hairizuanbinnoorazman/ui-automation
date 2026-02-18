@@ -132,7 +132,7 @@ func (h *TestProcedureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.testProcedureStore.Create(r.Context(), tp); err != nil {
-		if errors.Is(err, testprocedure.ErrInvalidTestProcedureName) || errors.Is(err, testprocedure.ErrInvalidSteps) {
+		if errors.Is(err, testprocedure.ErrInvalidTestProcedureName) || errors.Is(err, testprocedure.ErrInvalidSteps) || errors.Is(err, testprocedure.ErrInvalidStepName) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
