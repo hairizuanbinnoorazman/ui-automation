@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -433,6 +434,29 @@ func (h *TestProcedureHandler) UploadStepImage(w http.ResponseWriter, r *http.Re
 	}
 	if !validExts[ext] {
 		respondError(w, http.StatusBadRequest, "invalid file type, must be JPEG, PNG, GIF, or WebP")
+		return
+	}
+
+	// Validate file content using magic bytes (not just the extension)
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		respondError(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+	contentType := http.DetectContentType(buf[:n])
+	validMimeTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+	}
+	if !validMimeTypes[contentType] {
+		respondError(w, http.StatusBadRequest, "invalid file content, must be JPEG, PNG, GIF, or WebP")
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to process file")
 		return
 	}
 
