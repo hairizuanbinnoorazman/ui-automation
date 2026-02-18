@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -108,9 +109,20 @@ func (g *BedrockGenerator) Generate(ctx context.Context, procedure *testprocedur
 		return nil, fmt.Errorf("no content in response")
 	}
 
-	generatedCode := response.Content[0].Text
+	generatedCode := strings.TrimSpace(response.Content[0].Text)
 	if generatedCode == "" {
 		return nil, fmt.Errorf("empty generated code")
+	}
+
+	// Strip markdown code fences — LLMs often include these despite prompt instructions.
+	if strings.HasPrefix(generatedCode, "```") {
+		// Remove opening fence line (e.g. "```python\n" or "```\n")
+		if idx := strings.Index(generatedCode, "\n"); idx != -1 {
+			generatedCode = generatedCode[idx+1:]
+		}
+		// Remove closing fence
+		generatedCode = strings.TrimSuffix(strings.TrimSpace(generatedCode), "```")
+		generatedCode = strings.TrimSpace(generatedCode)
 	}
 
 	return []byte(generatedCode), nil
