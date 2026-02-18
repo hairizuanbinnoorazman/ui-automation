@@ -35,6 +35,7 @@ type alias CreateDialogState =
     { name : String
     , description : String
     , stepsJson : String
+    , error : Maybe String
     }
 
 
@@ -43,6 +44,7 @@ type alias EditDialogState =
     , name : String
     , description : String
     , stepsJson : String
+    , error : Maybe String
     }
 
 
@@ -137,6 +139,7 @@ update msg model =
                         { name = ""
                         , description = ""
                         , stepsJson = "[]"
+                        , error = Nothing
                         }
               }
             , Cmd.none
@@ -150,7 +153,7 @@ update msg model =
         SetCreateName name ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | createDialog = Just { dialog | name = name } }
+                    ( { model | createDialog = Just { dialog | name = name, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -160,7 +163,7 @@ update msg model =
         SetCreateDescription description ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | createDialog = Just { dialog | description = description } }
+                    ( { model | createDialog = Just { dialog | description = description, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -170,7 +173,7 @@ update msg model =
         SetCreateStepsJson stepsJson ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | createDialog = Just { dialog | stepsJson = stepsJson } }
+                    ( { model | createDialog = Just { dialog | stepsJson = stepsJson, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -183,7 +186,7 @@ update msg model =
                     case parseStepsJson dialog.stepsJson of
                         Err err ->
                             ( { model
-                                | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err)
+                                | createDialog = Just { dialog | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err) }
                               }
                             , Cmd.none
                             )
@@ -226,6 +229,7 @@ update msg model =
                         , name = procedure.name
                         , description = procedure.description
                         , stepsJson = stepsToJson procedure.steps
+                        , error = Nothing
                         }
               }
             , Cmd.none
@@ -239,7 +243,7 @@ update msg model =
         SetEditName name ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | editDialog = Just { dialog | name = name } }
+                    ( { model | editDialog = Just { dialog | name = name, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -249,7 +253,7 @@ update msg model =
         SetEditDescription description ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | editDialog = Just { dialog | description = description } }
+                    ( { model | editDialog = Just { dialog | description = description, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -259,7 +263,7 @@ update msg model =
         SetEditStepsJson stepsJson ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | editDialog = Just { dialog | stepsJson = stepsJson } }
+                    ( { model | editDialog = Just { dialog | stepsJson = stepsJson, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -272,7 +276,7 @@ update msg model =
                     case parseStepsJson dialog.stepsJson of
                         Err err ->
                             ( { model
-                                | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err)
+                                | editDialog = Just { dialog | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err) }
                               }
                             , Cmd.none
                             )
@@ -531,7 +535,21 @@ viewPagination model =
 viewCreateDialog : CreateDialogState -> Html Msg
 viewCreateDialog dialog =
     Components.viewDialogOverlay "Create Test Procedure"
-        [ Components.viewFormField "Name"
+        [ case dialog.error of
+            Just err ->
+                Html.div
+                    [ Html.Attributes.style "color" "red"
+                    , Html.Attributes.style "background-color" "#ffebee"
+                    , Html.Attributes.style "padding" "12px"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    , Html.Attributes.style "border" "1px solid #ffcdd2"
+                    ]
+                    [ Html.text err ]
+
+            Nothing ->
+                Html.text ""
+        , Components.viewFormField "Name"
             [ Html.Attributes.type_ "text"
             , Html.Attributes.value dialog.name
             , Html.Events.onInput SetCreateName
@@ -566,7 +584,21 @@ viewCreateDialog dialog =
 viewEditDialog : EditDialogState -> Html Msg
 viewEditDialog dialog =
     Components.viewDialogOverlay "Edit Test Procedure"
-        [ Components.viewFormField "Name"
+        [ case dialog.error of
+            Just err ->
+                Html.div
+                    [ Html.Attributes.style "color" "red"
+                    , Html.Attributes.style "background-color" "#ffebee"
+                    , Html.Attributes.style "padding" "12px"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    , Html.Attributes.style "border" "1px solid #ffcdd2"
+                    ]
+                    [ Html.text err ]
+
+            Nothing ->
+                Html.text ""
+        , Components.viewFormField "Name"
             [ Html.Attributes.type_ "text"
             , Html.Attributes.value dialog.name
             , Html.Events.onInput SetEditName
