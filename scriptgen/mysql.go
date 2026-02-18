@@ -3,6 +3,7 @@ package scriptgen
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
@@ -35,8 +36,8 @@ func (s *MySQLStore) Create(ctx context.Context, script *GeneratedScript) error 
 	}
 
 	if err := s.db.WithContext(ctx).Create(script).Error; err != nil {
-		// Check for unique constraint violation
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
+		// Check for unique constraint violation (MySQL and SQLite)
+		if errors.Is(err, gorm.ErrDuplicatedKey) || strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			s.logger.Warn(ctx, "script already exists for procedure and framework", map[string]interface{}{
 				"test_procedure_id": script.TestProcedureID.String(),
 				"framework":         script.Framework,
