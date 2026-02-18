@@ -569,41 +569,24 @@ viewCreateDialog dialog =
 viewCompleteDialog : CompleteDialogState -> Html Msg
 viewCompleteDialog dialog =
     Components.viewDialogOverlay "Complete Test Run"
-        [ Html.div
-            [ Html.Attributes.style "margin-bottom" "20px"
+        [ Components.viewSelectField "Status"
+            [ Html.Events.onInput SetCompleteStatus
             ]
-            [ Html.label
-                [ Html.Attributes.style "display" "block"
-                , Html.Attributes.style "margin-bottom" "8px"
-                , Html.Attributes.style "font-weight" "500"
-                , Html.Attributes.style "color" "#333"
+            [ Html.option
+                [ Html.Attributes.value "passed"
+                , Html.Attributes.selected (dialog.status == Types.Passed)
                 ]
-                [ Html.text "Status" ]
-            , Html.select
-                [ Html.Events.onInput SetCompleteStatus
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "10px"
-                , Html.Attributes.style "border" "1px solid #ddd"
-                , Html.Attributes.style "border-radius" "4px"
-                , Html.Attributes.style "font-size" "14px"
-                , Html.Attributes.style "box-sizing" "border-box"
+                [ Html.text "Passed" ]
+            , Html.option
+                [ Html.Attributes.value "failed"
+                , Html.Attributes.selected (dialog.status == Types.Failed)
                 ]
-                [ Html.option
-                    [ Html.Attributes.value "passed"
-                    , Html.Attributes.selected (dialog.status == Types.Passed)
-                    ]
-                    [ Html.text "Passed" ]
-                , Html.option
-                    [ Html.Attributes.value "failed"
-                    , Html.Attributes.selected (dialog.status == Types.Failed)
-                    ]
-                    [ Html.text "Failed" ]
-                , Html.option
-                    [ Html.Attributes.value "skipped"
-                    , Html.Attributes.selected (dialog.status == Types.Skipped)
-                    ]
-                    [ Html.text "Skipped" ]
+                [ Html.text "Failed" ]
+            , Html.option
+                [ Html.Attributes.value "skipped"
+                , Html.Attributes.selected (dialog.status == Types.Skipped)
                 ]
+                [ Html.text "Skipped" ]
             ]
         , Components.viewFormField "Notes"
             [ Html.Attributes.type_ "text"

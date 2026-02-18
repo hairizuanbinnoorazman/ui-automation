@@ -1,4 +1,4 @@
-module Components exposing (viewDialogOverlay, viewFormField, viewTextArea)
+module Components exposing (viewDialogOverlay, viewFormField, viewSelectField, viewTextArea)
 
 import Html exposing (Html)
 import Html.Attributes
@@ -97,4 +97,30 @@ viewTextArea labelText textareaAttrs =
                 ++ textareaAttrs
             )
             []
+        ]
+
+
+viewSelectField : String -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
+viewSelectField labelText selectAttrs options =
+    Html.div
+        [ Html.Attributes.style "margin-bottom" "20px"
+        ]
+        [ Html.label
+            [ Html.Attributes.style "display" "block"
+            , Html.Attributes.style "margin-bottom" "8px"
+            , Html.Attributes.style "font-weight" "500"
+            , Html.Attributes.style "color" "#333"
+            ]
+            [ Html.text labelText ]
+        , Html.select
+            ([ Html.Attributes.style "width" "100%"
+             , Html.Attributes.style "padding" "10px"
+             , Html.Attributes.style "border" "1px solid #ddd"
+             , Html.Attributes.style "border-radius" "4px"
+             , Html.Attributes.style "font-size" "14px"
+             , Html.Attributes.style "box-sizing" "border-box"
+             ]
+                ++ selectAttrs
+            )
+            options
         ]
