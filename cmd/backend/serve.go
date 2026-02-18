@@ -169,7 +169,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	projectRouter.HandleFunc("", projectHandler.Delete).Methods("DELETE")
 
 	// Test Procedure routes (protected by project authorization)
-	testProcedureHandler := handlers.NewTestProcedureHandler(testProcedureStore, blobStorage, log)
+	testProcedureHandler := handlers.NewTestProcedureHandler(testProcedureStore, projectStore, blobStorage, log)
 
 	// List and create procedures for a project
 	apiRouter.HandleFunc("/projects/{project_id}/procedures", testProcedureHandler.List).Methods("GET")

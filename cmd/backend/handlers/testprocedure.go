@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuan-noorazman/ui-automation/project"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 )
@@ -17,17 +18,71 @@ import (
 // TestProcedureHandler handles test procedure-related requests.
 type TestProcedureHandler struct {
 	testProcedureStore testprocedure.Store
+	projectStore       project.Store
 	storage            storage.BlobStorage
 	logger             logger.Logger
 }
 
 // NewTestProcedureHandler creates a new test procedure handler.
-func NewTestProcedureHandler(testProcedureStore testprocedure.Store, storage storage.BlobStorage, log logger.Logger) *TestProcedureHandler {
+func NewTestProcedureHandler(testProcedureStore testprocedure.Store, projectStore project.Store, storage storage.BlobStorage, log logger.Logger) *TestProcedureHandler {
 	return &TestProcedureHandler{
 		testProcedureStore: testProcedureStore,
+		projectStore:       projectStore,
 		storage:            storage,
 		logger:             log,
 	}
+}
+
+// checkProcedureOwnership verifies that the authenticated user owns the project
+// associated with the given procedure. Returns false if the check fails (response
+// already written).
+func (h *TestProcedureHandler) checkProcedureOwnership(w http.ResponseWriter, r *http.Request, procedureID uuid.UUID) bool {
+	userID, ok := GetUserID(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return false
+	}
+
+	tp, err := h.testProcedureStore.GetByID(r.Context(), procedureID)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return false
+		}
+		h.logger.Error(r.Context(), "failed to get test procedure for authorization", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "authorization check failed")
+		return false
+	}
+
+	proj, err := h.projectStore.GetByID(r.Context(), tp.ProjectID)
+	if err != nil {
+		if errors.Is(err, project.ErrProjectNotFound) {
+			respondError(w, http.StatusNotFound, "project not found")
+			return false
+		}
+		h.logger.Error(r.Context(), "failed to get project for authorization", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": tp.ProjectID,
+		})
+		respondError(w, http.StatusInternalServerError, "authorization check failed")
+		return false
+	}
+
+	if proj.OwnerID != userID {
+		h.logger.Warn(r.Context(), "unauthorized procedure access attempt", map[string]interface{}{
+			"user_id":           userID,
+			"project_id":        tp.ProjectID,
+			"owner_id":          proj.OwnerID,
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusForbidden, "you don't have access to this test procedure")
+		return false
+	}
+
+	return true
 }
 
 // CreateTestProcedureRequest represents a test procedure creation request.
@@ -348,6 +403,11 @@ func (h *TestProcedureHandler) UploadStepImage(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
 	// Parse multipart form (max 10MB)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		respondError(w, http.StatusBadRequest, "failed to parse multipart form")
@@ -416,6 +476,11 @@ func (h *TestProcedureHandler) GetDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
 	var response DraftDiffResponse
 
 	// Get draft version
@@ -461,6 +526,11 @@ func (h *TestProcedureHandler) ResetDraft(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
 	// Reset draft
 	if err := h.testProcedureStore.ResetDraft(r.Context(), id); err != nil {
 		if errors.Is(err, testprocedure.ErrNoCommittedVersion) {
@@ -491,6 +561,11 @@ func (h *TestProcedureHandler) CommitDraft(w http.ResponseWriter, r *http.Reques
 	// Extract test procedure ID from URL
 	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
 	if !ok {
+		return
+	}
+
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
 		return
 	}
 
