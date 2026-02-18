@@ -599,6 +599,12 @@ viewEditMode model =
         Just draft ->
             div [ class "edit-mode" ]
                 [ h3 [] [ text "Edit Draft" ]
+                , div [ class "procedure-meta" ]
+                    [ label [] [ text "Name" ]
+                    , input [ type_ "text", value draft.name, disabled True ] []
+                    , label [] [ text "Description" ]
+                    , input [ type_ "text", value draft.description, disabled True ] []
+                    ]
                 , div [ class "editing-steps" ]
                     (List.indexedMap (viewEditableStep model) model.editingSteps)
                 , button [ onClick AddStep, class "add-step-btn" ] [ text "+ Add Step" ]

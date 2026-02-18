@@ -479,6 +479,11 @@ func (s *MySQLStore) CommitDraft(ctx context.Context, procedureID uuid.UUID) (*T
 			return err
 		}
 
+		// Validate draft content before committing
+		if err := draft.Validate(); err != nil {
+			return err
+		}
+
 		// Determine root ID
 		proc, err := s.getByIDWithTx(ctx, tx, procedureID)
 		if err != nil {
