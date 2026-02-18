@@ -1,5 +1,6 @@
 module API exposing (..)
 
+import File exposing (File)
 import Http
 import Json.Decode as Decode
 import Types exposing (..)
@@ -116,10 +117,18 @@ getTestProcedures projectId limit offset toMsg =
         }
 
 
-getTestProcedure : String -> String -> (Result Http.Error TestProcedure -> msg) -> Cmd msg
-getTestProcedure projectId procedureId toMsg =
+getTestProcedure : String -> String -> Bool -> (Result Http.Error TestProcedure -> msg) -> Cmd msg
+getTestProcedure projectId procedureId isDraft toMsg =
+    let
+        draftParam =
+            if isDraft then
+                "?draft=true"
+
+            else
+                ""
+    in
     Http.get
-        { url = baseUrl ++ "/projects/" ++ projectId ++ "/procedures/" ++ procedureId
+        { url = baseUrl ++ "/projects/" ++ projectId ++ "/procedures/" ++ procedureId ++ draftParam
         , expect = Http.expectJson toMsg testProcedureDecoder
         }
 
@@ -156,6 +165,41 @@ deleteTestProcedure projectId procedureId toMsg =
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
         , tracker = Nothing
+        }
+
+
+uploadStepImage : String -> File -> (Result Http.Error String -> msg) -> Cmd msg
+uploadStepImage procedureId file toMsg =
+    Http.post
+        { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/steps/images"
+        , body = Http.multipartBody [ Http.filePart "image" file ]
+        , expect = Http.expectJson toMsg (Decode.field "image_path" Decode.string)
+        }
+
+
+getDraftDiff : String -> (Result Http.Error DraftDiff -> msg) -> Cmd msg
+getDraftDiff procedureId toMsg =
+    Http.get
+        { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/diff"
+        , expect = Http.expectJson toMsg draftDiffDecoder
+        }
+
+
+resetDraft : String -> (Result Http.Error () -> msg) -> Cmd msg
+resetDraft procedureId toMsg =
+    Http.post
+        { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/draft/reset"
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        }
+
+
+commitDraft : String -> (Result Http.Error TestProcedure -> msg) -> Cmd msg
+commitDraft procedureId toMsg =
+    Http.post
+        { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/draft/commit"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg testProcedureDecoder
         }
 
 

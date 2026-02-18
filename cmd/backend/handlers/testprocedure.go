@@ -2,25 +2,88 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuan-noorazman/ui-automation/project"
+	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 )
 
 // TestProcedureHandler handles test procedure-related requests.
 type TestProcedureHandler struct {
 	testProcedureStore testprocedure.Store
+	projectStore       project.Store
+	storage            storage.BlobStorage
 	logger             logger.Logger
 }
 
 // NewTestProcedureHandler creates a new test procedure handler.
-func NewTestProcedureHandler(testProcedureStore testprocedure.Store, log logger.Logger) *TestProcedureHandler {
+func NewTestProcedureHandler(testProcedureStore testprocedure.Store, projectStore project.Store, storage storage.BlobStorage, log logger.Logger) *TestProcedureHandler {
 	return &TestProcedureHandler{
 		testProcedureStore: testProcedureStore,
+		projectStore:       projectStore,
+		storage:            storage,
 		logger:             log,
 	}
+}
+
+// checkProcedureOwnership verifies that the authenticated user owns the project
+// associated with the given procedure. Returns false if the check fails (response
+// already written).
+func (h *TestProcedureHandler) checkProcedureOwnership(w http.ResponseWriter, r *http.Request, procedureID uuid.UUID) bool {
+	userID, ok := GetUserID(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return false
+	}
+
+	tp, err := h.testProcedureStore.GetByID(r.Context(), procedureID)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return false
+		}
+		h.logger.Error(r.Context(), "failed to get test procedure for authorization", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "authorization check failed")
+		return false
+	}
+
+	proj, err := h.projectStore.GetByID(r.Context(), tp.ProjectID)
+	if err != nil {
+		if errors.Is(err, project.ErrProjectNotFound) {
+			respondError(w, http.StatusNotFound, "project not found")
+			return false
+		}
+		h.logger.Error(r.Context(), "failed to get project for authorization", map[string]interface{}{
+			"error":      err.Error(),
+			"project_id": tp.ProjectID,
+		})
+		respondError(w, http.StatusInternalServerError, "authorization check failed")
+		return false
+	}
+
+	if proj.OwnerID != userID {
+		h.logger.Warn(r.Context(), "unauthorized procedure access attempt", map[string]interface{}{
+			"user_id":           userID,
+			"project_id":        tp.ProjectID,
+			"owner_id":          proj.OwnerID,
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusForbidden, "you don't have access to this test procedure")
+		return false
+	}
+
+	return true
 }
 
 // CreateTestProcedureRequest represents a test procedure creation request.
@@ -69,7 +132,7 @@ func (h *TestProcedureHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.testProcedureStore.Create(r.Context(), tp); err != nil {
-		if errors.Is(err, testprocedure.ErrInvalidTestProcedureName) || errors.Is(err, testprocedure.ErrInvalidSteps) {
+		if errors.Is(err, testprocedure.ErrInvalidTestProcedureName) || errors.Is(err, testprocedure.ErrInvalidSteps) || errors.Is(err, testprocedure.ErrInvalidStepName) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -136,6 +199,7 @@ func (h *TestProcedureHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByID handles getting a single test procedure by ID.
+// Supports ?draft=true query parameter to retrieve draft version.
 func (h *TestProcedureHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
 	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
@@ -143,25 +207,51 @@ func (h *TestProcedureHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get test procedure
-	tp, err := h.testProcedureStore.GetByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
-			respondError(w, http.StatusNotFound, "test procedure not found")
+	// Check if draft version is requested
+	isDraft := r.URL.Query().Get("draft") == "true"
+
+	var tp *testprocedure.TestProcedure
+	var err error
+
+	if isDraft {
+		tp, err = h.testProcedureStore.GetDraft(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, testprocedure.ErrDraftNotFound) {
+				respondError(w, http.StatusNotFound, "draft version not found")
+				return
+			}
+			h.logger.Error(r.Context(), "failed to get draft", map[string]interface{}{
+				"error":             err.Error(),
+				"test_procedure_id": id,
+			})
+			respondError(w, http.StatusInternalServerError, "failed to get draft")
 			return
 		}
-		h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
-			"error":             err.Error(),
-			"test_procedure_id": id,
-		})
-		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
-		return
+	} else {
+		tp, err = h.testProcedureStore.GetLatestCommitted(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, testprocedure.ErrNoCommittedVersion) {
+				respondError(w, http.StatusNotFound, "no committed version exists")
+				return
+			}
+			if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+				respondError(w, http.StatusNotFound, "test procedure not found")
+				return
+			}
+			h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
+				"error":             err.Error(),
+				"test_procedure_id": id,
+			})
+			respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+			return
+		}
 	}
 
 	respondJSON(w, http.StatusOK, tp)
 }
 
-// Update handles updating a test procedure (in-place, doesn't create version).
+// Update handles updating a test procedure draft.
+// This always updates the draft (v0), not the committed version.
 func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// Extract test procedure ID from URL
 	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
@@ -193,8 +283,12 @@ func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update test procedure
-	if err := h.testProcedureStore.Update(r.Context(), id, setters...); err != nil {
+	// Update draft
+	if err := h.testProcedureStore.UpdateDraft(r.Context(), id, setters...); err != nil {
+		if errors.Is(err, testprocedure.ErrDraftNotFound) {
+			respondError(w, http.StatusNotFound, "draft not found")
+			return
+		}
 		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
 			respondError(w, http.StatusNotFound, "test procedure not found")
 			return
@@ -203,26 +297,26 @@ func (h *TestProcedureHandler) Update(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		h.logger.Error(r.Context(), "failed to update test procedure", map[string]interface{}{
+		h.logger.Error(r.Context(), "failed to update draft", map[string]interface{}{
 			"error":             err.Error(),
 			"test_procedure_id": id,
 		})
-		respondError(w, http.StatusInternalServerError, "failed to update test procedure")
+		respondError(w, http.StatusInternalServerError, "failed to update draft")
 		return
 	}
 
-	// Get updated test procedure to return it
-	updatedProcedure, err := h.testProcedureStore.GetByID(r.Context(), id)
+	// Get updated draft to return it
+	updatedDraft, err := h.testProcedureStore.GetDraft(r.Context(), id)
 	if err != nil {
-		h.logger.Error(r.Context(), "failed to get updated test procedure", map[string]interface{}{
+		h.logger.Error(r.Context(), "failed to get updated draft", map[string]interface{}{
 			"error":             err.Error(),
 			"test_procedure_id": id,
 		})
-		respondError(w, http.StatusInternalServerError, "failed to get updated test procedure")
+		respondError(w, http.StatusInternalServerError, "failed to get updated draft")
 		return
 	}
 
-	respondJSON(w, http.StatusOK, updatedProcedure)
+	respondJSON(w, http.StatusOK, updatedDraft)
 }
 
 // Delete handles deleting a test procedure.
@@ -300,4 +394,227 @@ func (h *TestProcedureHandler) GetVersionHistory(w http.ResponseWriter, r *http.
 	}
 
 	respondJSON(w, http.StatusOK, versions)
+}
+
+// UploadStepImage handles uploading an image for a test procedure step.
+func (h *TestProcedureHandler) UploadStepImage(w http.ResponseWriter, r *http.Request) {
+	// Extract test procedure ID from URL
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
+		return
+	}
+
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
+	// Parse multipart form (max 10MB)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		respondError(w, http.StatusBadRequest, "failed to parse multipart form")
+		return
+	}
+
+	// Get the file from the form
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "image file is required")
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	validExts := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".gif":  true,
+		".webp": true,
+	}
+	if !validExts[ext] {
+		respondError(w, http.StatusBadRequest, "invalid file type, must be JPEG, PNG, GIF, or WebP")
+		return
+	}
+
+	// Validate file content using magic bytes (not just the extension)
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		respondError(w, http.StatusBadRequest, "failed to read file")
+		return
+	}
+	contentType := http.DetectContentType(buf[:n])
+	validMimeTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+	}
+	if !validMimeTypes[contentType] {
+		respondError(w, http.StatusBadRequest, "invalid file content, must be JPEG, PNG, GIF, or WebP")
+		return
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to process file")
+		return
+	}
+
+	// Generate unique filename
+	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	path := fmt.Sprintf("test-procedures/%s/steps/%s", id.String(), filename)
+
+	// Upload to storage
+	if err := h.storage.Upload(r.Context(), path, file); err != nil {
+		h.logger.Error(r.Context(), "failed to upload image", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": id.String(),
+			"path":              path,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to upload image")
+		return
+	}
+
+	h.logger.Info(r.Context(), "image uploaded", map[string]interface{}{
+		"test_procedure_id": id.String(),
+		"path":              path,
+	})
+
+	// Return the image path
+	respondJSON(w, http.StatusOK, map[string]string{
+		"image_path": path,
+	})
+}
+
+// DraftDiffResponse represents the response for GetDiff.
+type DraftDiffResponse struct {
+	Draft     *testprocedure.TestProcedure `json:"draft"`
+	Committed *testprocedure.TestProcedure `json:"committed"`
+}
+
+// GetDiff handles getting both draft and committed versions for comparison.
+func (h *TestProcedureHandler) GetDiff(w http.ResponseWriter, r *http.Request) {
+	// Extract test procedure ID from URL
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
+		return
+	}
+
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
+	var response DraftDiffResponse
+
+	// Get draft version
+	draft, err := h.testProcedureStore.GetDraft(r.Context(), id)
+	if err != nil {
+		if !errors.Is(err, testprocedure.ErrDraftNotFound) {
+			h.logger.Error(r.Context(), "failed to get draft", map[string]interface{}{
+				"error":             err.Error(),
+				"test_procedure_id": id,
+			})
+			respondError(w, http.StatusInternalServerError, "failed to get draft")
+			return
+		}
+		// Draft not found is acceptable, leave nil
+	} else {
+		response.Draft = draft
+	}
+
+	// Get latest committed version
+	committed, err := h.testProcedureStore.GetLatestCommitted(r.Context(), id)
+	if err != nil {
+		if !errors.Is(err, testprocedure.ErrNoCommittedVersion) {
+			h.logger.Error(r.Context(), "failed to get committed version", map[string]interface{}{
+				"error":             err.Error(),
+				"test_procedure_id": id,
+			})
+			respondError(w, http.StatusInternalServerError, "failed to get committed version")
+			return
+		}
+		// No committed version is acceptable, leave nil
+	} else {
+		response.Committed = committed
+	}
+
+	respondJSON(w, http.StatusOK, response)
+}
+
+// ResetDraft handles resetting the draft to match the latest committed version.
+func (h *TestProcedureHandler) ResetDraft(w http.ResponseWriter, r *http.Request) {
+	// Extract test procedure ID from URL
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
+		return
+	}
+
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
+	// Reset draft
+	if err := h.testProcedureStore.ResetDraft(r.Context(), id); err != nil {
+		if errors.Is(err, testprocedure.ErrNoCommittedVersion) {
+			respondError(w, http.StatusBadRequest, "no committed version exists to reset from")
+			return
+		}
+		if errors.Is(err, testprocedure.ErrDraftNotFound) {
+			respondError(w, http.StatusNotFound, "draft not found")
+			return
+		}
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return
+		}
+		h.logger.Error(r.Context(), "failed to reset draft", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to reset draft")
+		return
+	}
+
+	respondSuccess(w, "draft reset successfully")
+}
+
+// CommitDraft handles committing the draft as a new version.
+func (h *TestProcedureHandler) CommitDraft(w http.ResponseWriter, r *http.Request) {
+	// Extract test procedure ID from URL
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
+		return
+	}
+
+	// Verify the authenticated user owns the project this procedure belongs to
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
+	// Commit draft
+	newVersion, err := h.testProcedureStore.CommitDraft(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrDraftNotFound) {
+			respondError(w, http.StatusNotFound, "draft not found")
+			return
+		}
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return
+		}
+		if errors.Is(err, testprocedure.ErrInvalidStepName) {
+			respondError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		h.logger.Error(r.Context(), "failed to commit draft", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to commit draft")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, newVersion)
 }

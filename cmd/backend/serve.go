@@ -169,7 +169,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	projectRouter.HandleFunc("", projectHandler.Delete).Methods("DELETE")
 
 	// Test Procedure routes (protected by project authorization)
-	testProcedureHandler := handlers.NewTestProcedureHandler(testProcedureStore, log)
+	testProcedureHandler := handlers.NewTestProcedureHandler(testProcedureStore, projectStore, blobStorage, log)
 
 	// List and create procedures for a project
 	apiRouter.HandleFunc("/projects/{project_id}/procedures", testProcedureHandler.List).Methods("GET")
@@ -179,6 +179,14 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}", testProcedureHandler.GetByID).Methods("GET")
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}", testProcedureHandler.Update).Methods("PUT")
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}", testProcedureHandler.Delete).Methods("DELETE")
+
+	// Image uploads for steps
+	apiRouter.HandleFunc("/procedures/{id}/steps/images", testProcedureHandler.UploadStepImage).Methods("POST")
+
+	// Draft operations
+	apiRouter.HandleFunc("/procedures/{id}/diff", testProcedureHandler.GetDiff).Methods("GET")
+	apiRouter.HandleFunc("/procedures/{id}/draft/reset", testProcedureHandler.ResetDraft).Methods("POST")
+	apiRouter.HandleFunc("/procedures/{id}/draft/commit", testProcedureHandler.CommitDraft).Methods("POST")
 
 	// Versioning operations
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.CreateVersion).Methods("POST")

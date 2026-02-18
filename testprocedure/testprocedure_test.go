@@ -33,8 +33,8 @@ func TestTestProcedure_Validate(t *testing.T) {
 				ProjectID: projectID,
 				CreatedBy: createdBy,
 				Steps: Steps{
-					{"action": "click", "selector": "#button"},
-					{"action": "type", "selector": "#input", "value": "test"},
+					{Name: "Click button", Instructions: "Click the submit button", ImagePaths: []string{}},
+					{Name: "Type input", Instructions: "Type test into input", ImagePaths: []string{"path/image.png"}},
 				},
 			},
 			wantErr: nil,
@@ -64,6 +64,18 @@ func TestTestProcedure_Validate(t *testing.T) {
 			wantErr: ErrInvalidCreatedBy,
 		},
 		{
+			name: "step without name",
+			testProcedure: TestProcedure{
+				Name:      "Test Procedure",
+				ProjectID: projectID,
+				CreatedBy: createdBy,
+				Steps: Steps{
+					{Name: "", Instructions: "Missing name", ImagePaths: []string{}},
+				},
+			},
+			wantErr: ErrInvalidStepName,
+		},
+		{
 			name:          "missing all required fields",
 			testProcedure: TestProcedure{},
 			wantErr:       ErrInvalidTestProcedureName,
@@ -74,7 +86,12 @@ func TestTestProcedure_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.testProcedure.Validate()
 			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr)
+				if tt.wantErr == ErrInvalidStepName {
+					assert.Error(t, err)
+					assert.Contains(t, err.Error(), "step")
+				} else {
+					assert.ErrorIs(t, err, tt.wantErr)
+				}
 			} else {
 				assert.NoError(t, err)
 			}
@@ -84,9 +101,9 @@ func TestTestProcedure_Validate(t *testing.T) {
 
 func TestSteps_MarshalUnmarshal(t *testing.T) {
 	steps := Steps{
-		{"action": "navigate", "url": "https://example.com"},
-		{"action": "click", "selector": "#button"},
-		{"action": "type", "selector": "#input", "value": "test"},
+		{Name: "Navigate", Instructions: "Go to example.com", ImagePaths: []string{"nav.png"}},
+		{Name: "Click", Instructions: "Click the button", ImagePaths: []string{}},
+		{Name: "Type", Instructions: "Type test into input", ImagePaths: []string{"before.png", "after.png"}},
 	}
 
 	// Marshal to JSON
@@ -100,15 +117,17 @@ func TestSteps_MarshalUnmarshal(t *testing.T) {
 
 	// Verify content
 	assert.Equal(t, len(steps), len(unmarshaled))
-	assert.Equal(t, steps[0]["action"], unmarshaled[0]["action"])
-	assert.Equal(t, steps[1]["selector"], unmarshaled[1]["selector"])
-	assert.Equal(t, steps[2]["value"], unmarshaled[2]["value"])
+	assert.Equal(t, steps[0].Name, unmarshaled[0].Name)
+	assert.Equal(t, steps[0].Instructions, unmarshaled[0].Instructions)
+	assert.Equal(t, steps[0].ImagePaths, unmarshaled[0].ImagePaths)
+	assert.Equal(t, steps[1].Name, unmarshaled[1].Name)
+	assert.Equal(t, steps[2].ImagePaths, unmarshaled[2].ImagePaths)
 }
 
 func TestSteps_Value(t *testing.T) {
 	t.Run("non-nil steps", func(t *testing.T) {
 		steps := Steps{
-			{"action": "click"},
+			{Name: "Click", Instructions: "Click button", ImagePaths: []string{}},
 		}
 		value, err := steps.Value()
 		require.NoError(t, err)
@@ -121,29 +140,62 @@ func TestSteps_Value(t *testing.T) {
 		assert.Equal(t, steps, result)
 	})
 
+	t.Run("empty steps", func(t *testing.T) {
+		steps := Steps{}
+		value, err := steps.Value()
+		require.NoError(t, err)
+		assert.NotNil(t, value)
+
+		// Should marshal to empty array
+		var result Steps
+		err = json.Unmarshal(value.([]byte), &result)
+		require.NoError(t, err)
+		assert.Len(t, result, 0)
+	})
+
 	t.Run("nil steps", func(t *testing.T) {
 		var steps Steps
 		value, err := steps.Value()
 		require.NoError(t, err)
-		assert.Nil(t, value)
+		// Should marshal to empty array, not nil
+		assert.NotNil(t, value)
 	})
 }
 
 func TestSteps_Scan(t *testing.T) {
 	t.Run("scan valid JSON", func(t *testing.T) {
-		jsonData := []byte(`[{"action":"click","selector":"#button"}]`)
+		jsonData := []byte(`[{"name":"Click","instructions":"Click button","image_paths":[]}]`)
 		var steps Steps
 		err := steps.Scan(jsonData)
 		require.NoError(t, err)
 		assert.Len(t, steps, 1)
-		assert.Equal(t, "click", steps[0]["action"])
+		assert.Equal(t, "Click", steps[0].Name)
+		assert.Equal(t, "Click button", steps[0].Instructions)
+		assert.Empty(t, steps[0].ImagePaths)
+	})
+
+	t.Run("scan with image paths", func(t *testing.T) {
+		jsonData := []byte(`[{"name":"Step","instructions":"Do it","image_paths":["a.png","b.png"]}]`)
+		var steps Steps
+		err := steps.Scan(jsonData)
+		require.NoError(t, err)
+		assert.Len(t, steps, 1)
+		assert.Len(t, steps[0].ImagePaths, 2)
+		assert.Equal(t, "a.png", steps[0].ImagePaths[0])
 	})
 
 	t.Run("scan nil value", func(t *testing.T) {
 		var steps Steps
 		err := steps.Scan(nil)
 		require.NoError(t, err)
-		assert.Nil(t, steps)
+		assert.Empty(t, steps)
+	})
+
+	t.Run("scan empty array", func(t *testing.T) {
+		var steps Steps
+		err := steps.Scan([]byte(`[]`))
+		require.NoError(t, err)
+		assert.Empty(t, steps)
 	})
 
 	t.Run("scan invalid type", func(t *testing.T) {
