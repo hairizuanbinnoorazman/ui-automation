@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -350,10 +351,29 @@ func (h *ScriptGenHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// List scripts
-	scripts, err := h.scriptStore.ListByProcedure(r.Context(), procedureID)
+	// Parse query parameters
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	offset := 0
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	// Fetch all scripts; pagination is applied in-memory since a procedure will
+	// have at most one script per framework (a very small set).
+	all, err := h.scriptStore.ListByProcedure(ctx, procedureID)
 	if err != nil {
-		h.logger.Error(r.Context(), "failed to list scripts", map[string]interface{}{
+		h.logger.Error(ctx, "failed to list scripts", map[string]interface{}{
 			"error":             err.Error(),
 			"test_procedure_id": procedureID.String(),
 		})
@@ -361,7 +381,21 @@ func (h *ScriptGenHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, NewPaginatedResponse(scripts, len(scripts), 0, 0))
+	total := len(all)
+
+	// Apply offset
+	if offset >= total {
+		all = all[:0]
+	} else {
+		all = all[offset:]
+	}
+
+	// Apply limit
+	if limit < len(all) {
+		all = all[:limit]
+	}
+
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(all, total, limit, offset))
 }
 
 // GetByID handles retrieving a script by its ID.
@@ -440,6 +474,12 @@ func (h *ScriptGenHandler) Download(w http.ResponseWriter, r *http.Request) {
 	// Verify user owns the procedure's project
 	if _, ok := h.verifyProcedureOwnership(w, ctx, script.TestProcedureID, userID); !ok {
 		// Helper already logged and responded with appropriate error
+		return
+	}
+
+	// Guard against downloading incomplete or failed scripts.
+	if script.GenerationStatus != scriptgen.StatusCompleted {
+		respondError(w, http.StatusConflict, "script is not ready for download: generation status is "+string(script.GenerationStatus))
 		return
 	}
 
@@ -541,7 +581,7 @@ func (h *ScriptGenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		"script_id": scriptID.String(),
 	})
 
-	w.WriteHeader(http.StatusNoContent)
+	respondSuccess(w, "script deleted successfully")
 }
 
 // filenameSanitizer replaces characters that are problematic in filenames or storage paths.
