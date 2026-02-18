@@ -193,7 +193,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.GetVersionHistory).Methods("GET")
 
 	// Test Run routes (protected)
-	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, blobStorage, log)
+	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, testProcedureStore, blobStorage, log)
 
 	// List and create runs for a procedure
 	apiRouter.HandleFunc("/procedures/{procedure_id}/runs", testRunHandler.List).Methods("GET")
@@ -204,6 +204,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/runs/{run_id}", testRunHandler.Update).Methods("PUT")
 	apiRouter.HandleFunc("/runs/{run_id}/start", testRunHandler.Start).Methods("POST")
 	apiRouter.HandleFunc("/runs/{run_id}/complete", testRunHandler.Complete).Methods("POST")
+
+	// Guide generation
+	apiRouter.HandleFunc("/runs/{run_id}/guide", testRunHandler.GenerateGuide).Methods("GET")
 
 	// Asset operations
 	apiRouter.HandleFunc("/runs/{run_id}/assets", testRunHandler.UploadAsset).Methods("POST")
