@@ -360,7 +360,7 @@ update msg model =
         DraftReset result ->
             case result of
                 Ok () ->
-                    ( model, update LoadDraftAndCommitted model |> Tuple.second )
+                    update LoadDraftAndCommitted model
 
                 Err _ ->
                     ( { model | error = Just "Failed to reset draft", loading = False }
