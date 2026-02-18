@@ -3,7 +3,8 @@ module Pages.TestProcedures exposing (Model, Msg, init, update, view)
 import API
 import Dict exposing (Dict)
 import File exposing (File)
-import Html exposing (Html, button, div, h2, h3, h4, input, label, li, p, span, text, textarea, ul)
+import Components
+import Html exposing (Html, button, div, h1, h2, h3, h4, input, label, li, p, span, text, textarea, ul)
 import Html.Attributes exposing (class, disabled, placeholder, style, type_, value)
 import Html.Events exposing (on, onClick, onInput)
 import Http
@@ -478,8 +479,25 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div [ class "test-procedures-page" ]
-        [ h2 [] [ text "Test Procedures" ]
+    div []
+        [ div [ class "page-header" ]
+            [ h1 [ class "mdc-typography--headline3" ] [ text "Test Procedures" ]
+            , button
+                [ onClick OpenCreateDialog
+                , class "mdc-button mdc-button--raised"
+                ]
+                [ text "New Procedure" ]
+            ]
+        , case model.error of
+            Just err ->
+                div
+                    [ style "color" "red"
+                    , style "margin-bottom" "20px"
+                    ]
+                    [ text err ]
+
+            Nothing ->
+                text ""
         , div [ class "procedures-layout" ]
             [ viewProcedureList model
             , viewSelectedProcedure model
@@ -495,63 +513,65 @@ view model =
 
 viewCreateDialog : CreateDialogState -> Html Msg
 viewCreateDialog dialog =
-    div [ class "dialog-overlay" ]
-        [ div [ class "dialog" ]
-            [ h3 [] [ text "Create Procedure" ]
-            , div [ class "dialog-field" ]
-                [ label [] [ text "Name" ]
-                , input
-                    [ type_ "text"
-                    , placeholder "Procedure name"
-                    , value dialog.name
-                    , onInput SetCreateName
-                    ]
-                    []
-                ]
-            , div [ class "dialog-field" ]
-                [ label [] [ text "Description" ]
-                , input
-                    [ type_ "text"
-                    , placeholder "Procedure description"
-                    , value dialog.description
-                    , onInput SetCreateDescription
-                    ]
-                    []
-                ]
-            , div [ class "dialog-actions" ]
-                [ button
-                    [ onClick SubmitCreate
-                    , disabled (String.isEmpty dialog.name)
-                    ]
-                    [ text "Create" ]
-                , button [ onClick CloseCreateDialog ] [ text "Cancel" ]
-                ]
+    Components.viewDialogOverlay "Create Procedure"
+        [ Components.viewFormField "Name"
+            [ type_ "text"
+            , placeholder "Procedure name"
+            , value dialog.name
+            , onInput SetCreateName
             ]
+        , Components.viewFormField "Description"
+            [ type_ "text"
+            , placeholder "Procedure description"
+            , value dialog.description
+            , onInput SetCreateDescription
+            ]
+        ]
+        [ button
+            [ onClick CloseCreateDialog
+            , class "mdc-button"
+            ]
+            [ text "Cancel" ]
+        , button
+            [ onClick SubmitCreate
+            , class "mdc-button mdc-button--raised"
+            , disabled (String.isEmpty dialog.name)
+            ]
+            [ text "Create" ]
         ]
 
 
 viewProcedureList : Model -> Html Msg
 viewProcedureList model =
     div [ class "procedures-list" ]
-        [ div [ class "procedures-list-header" ]
-            [ h3 [] [ text "Procedures" ]
-            , button [ onClick OpenCreateDialog, class "create-procedure-btn" ] [ text "+ New Procedure" ]
-            ]
-        , if List.isEmpty model.procedures then
-            p [] [ text "No procedures found" ]
+        [ if List.isEmpty model.procedures then
+            p [ class "mdc-typography--body1" ] [ text "No procedures found" ]
 
           else
-            ul []
-                (List.map
-                    (\proc ->
-                        li
-                            [ onClick (SelectProcedure proc)
-                            , class "procedure-item"
-                            ]
-                            [ text proc.name ]
+            Html.table
+                [ class "mdc-data-table__table"
+                , style "width" "100%"
+                , style "border-collapse" "collapse"
+                ]
+                [ Html.thead []
+                    [ Html.tr []
+                        [ Html.th [ style "text-align" "left", style "padding" "12px" ] [ text "Name" ]
+                        ]
+                    ]
+                , Html.tbody []
+                    (List.map
+                        (\proc ->
+                            Html.tr
+                                [ onClick (SelectProcedure proc)
+                                , style "border-bottom" "1px solid #ddd"
+                                , style "cursor" "pointer"
+                                ]
+                                [ Html.td [ style "padding" "12px" ] [ text proc.name ]
+                                ]
+                        )
+                        model.procedures
                     )
-                    model.procedures
-                )
+                ]
         , viewPagination model
         ]
 
@@ -565,16 +585,24 @@ viewPagination model =
         totalPages =
             (model.total + model.limit - 1) // model.limit
     in
-    div [ class "pagination" ]
+    div
+        [ style "display" "flex"
+        , style "justify-content" "center"
+        , style "align-items" "center"
+        , style "gap" "10px"
+        , style "margin-top" "20px"
+        ]
         [ button
             [ onClick (LoadPage (max 0 (model.offset - model.limit)))
             , disabled (currentPage == 0)
+            , class "mdc-button"
             ]
             [ text "Previous" ]
         , span [] [ text ("Page " ++ String.fromInt (currentPage + 1) ++ " of " ++ String.fromInt (max 1 totalPages)) ]
         , button
             [ onClick (LoadPage (model.offset + model.limit))
             , disabled (currentPage >= totalPages - 1)
+            , class "mdc-button"
             ]
             [ text "Next" ]
         ]
@@ -584,11 +612,12 @@ viewSelectedProcedure : Model -> Html Msg
 viewSelectedProcedure model =
     case model.selectedProcedure of
         Nothing ->
-            div [ class "no-selection" ]
-                [ p [] [ text "Select a procedure to view details" ]
+            div
+                [ style "padding" "24px" ]
+                [ p [ class "mdc-typography--body1" ] [ text "Select a procedure to view details" ]
                 ]
 
-        Just procedure ->
+        Just _ ->
             div [ class "procedure-details" ]
                 [ viewModeSelector model
                 , case model.viewMode of
@@ -619,15 +648,19 @@ procedureContentEqual maybeA maybeB =
 
 viewModeSelector : Model -> Html Msg
 viewModeSelector model =
-    div [ class "mode-selector" ]
+    div
+        [ style "display" "flex"
+        , style "gap" "8px"
+        , style "margin-bottom" "16px"
+        ]
         [ button
             [ onClick SwitchToViewMode
             , class
                 (if model.viewMode == ViewMode then
-                    "active"
+                    "mdc-button mdc-button--raised"
 
                  else
-                    ""
+                    "mdc-button"
                 )
             ]
             [ text "View" ]
@@ -635,10 +668,10 @@ viewModeSelector model =
             [ onClick SwitchToEditMode
             , class
                 (if model.viewMode == EditMode then
-                    "active"
+                    "mdc-button mdc-button--raised"
 
                  else
-                    ""
+                    "mdc-button"
                 )
             ]
             [ text "Edit" ]
@@ -646,10 +679,10 @@ viewModeSelector model =
             [ onClick SwitchToNewVersionMode
             , class
                 (if model.viewMode == NewVersionMode then
-                    "active"
+                    "mdc-button mdc-button--raised"
 
                  else
-                    ""
+                    "mdc-button"
                 )
             , disabled (procedureContentEqual model.draftProcedure model.committedProcedure)
             ]
@@ -665,18 +698,24 @@ viewModeView model =
     else
         case ( model.committedProcedure, model.draftProcedure ) of
             ( Just committed, _ ) ->
-                div [ class "view-mode" ]
-                    [ h3 [] [ text committed.name ]
-                    , p [] [ text committed.description ]
+                div []
+                    [ h3 [ class "mdc-typography--headline5" ] [ text committed.name ]
+                    , p [ class "mdc-typography--body1" ] [ text committed.description ]
                     , viewSteps committed.steps
                     ]
 
             ( Nothing, Just draft ) ->
-                div [ class "view-mode draft-only" ]
-                    [ div [ class "draft-banner" ]
-                        [ text "⚠ Draft only - No published version yet" ]
-                    , h3 [] [ text draft.name ]
-                    , p [] [ text draft.description ]
+                div []
+                    [ div
+                        [ style "background-color" "#fff3e0"
+                        , style "border-left" "4px solid #ff9800"
+                        , style "padding" "12px 16px"
+                        , style "margin-bottom" "16px"
+                        , class "mdc-typography--body2"
+                        ]
+                        [ text "Draft only - No published version yet" ]
+                    , h3 [ class "mdc-typography--headline5" ] [ text draft.name ]
+                    , p [ class "mdc-typography--body1" ] [ text draft.description ]
                     , viewSteps draft.steps
                     ]
 
@@ -687,15 +726,21 @@ viewModeView model =
 viewSteps : List TestStep -> Html Msg
 viewSteps steps =
     if List.isEmpty steps then
-        p [ class "no-steps" ] [ text "No steps defined" ]
+        p [ class "mdc-typography--body1" ] [ text "No steps defined" ]
 
     else
-        div [ class "steps-list" ]
+        div []
             (List.indexedMap
                 (\index step ->
-                    div [ class "step-card" ]
-                        [ h4 [] [ text (String.fromInt (index + 1) ++ ". " ++ step.name) ]
-                        , p [] [ text step.instructions ]
+                    div
+                        [ style "border" "1px solid #e0e0e0"
+                        , style "border-radius" "4px"
+                        , style "padding" "16px"
+                        , style "margin-bottom" "12px"
+                        ]
+                        [ h4 [ class "mdc-typography--subtitle1", style "margin-top" "0" ]
+                            [ text (String.fromInt (index + 1) ++ ". " ++ step.name) ]
+                        , p [ class "mdc-typography--body2" ] [ text step.instructions ]
                         , viewImageGallery step.imagePaths
                         ]
                 )
@@ -709,12 +754,21 @@ viewImageGallery imagePaths =
         text ""
 
     else
-        div [ class "image-gallery" ]
+        div
+            [ style "display" "flex"
+            , style "flex-wrap" "wrap"
+            , style "gap" "8px"
+            , style "margin-top" "8px"
+            ]
             (List.map
                 (\path ->
-                    div [ class "image-item" ]
-                        [ Html.img [ Html.Attributes.src ("/uploads/" ++ path) ] []
+                    Html.img
+                        [ Html.Attributes.src ("/uploads/" ++ path)
+                        , style "max-width" "120px"
+                        , style "border-radius" "4px"
+                        , style "border" "1px solid #e0e0e0"
                         ]
+                        []
                 )
                 imagePaths
             )
@@ -727,44 +781,59 @@ viewEditMode model =
             div [] [ text "Loading draft..." ]
 
         Just draft ->
-            div [ class "edit-mode" ]
-                [ h3 [] [ text "Edit Draft" ]
-                , div [ class "procedure-meta" ]
-                    [ label [] [ text "Name" ]
-                    , input [ type_ "text", value draft.name, disabled True ] []
-                    , label [] [ text "Description" ]
-                    , input [ type_ "text", value draft.description, disabled True ] []
+            div []
+                [ h3 [ class "mdc-typography--headline5" ] [ text "Edit Draft" ]
+                , div [ style "margin-bottom" "16px" ]
+                    [ Components.viewFormField "Name"
+                        [ type_ "text"
+                        , value draft.name
+                        , disabled True
+                        ]
+                    , Components.viewFormField "Description"
+                        [ type_ "text"
+                        , value draft.description
+                        , disabled True
+                        ]
                     ]
-                , div [ class "editing-steps" ]
+                , div []
                     (List.indexedMap (viewEditableStep model) model.editingSteps)
-                , button [ onClick AddStep, class "add-step-btn" ] [ text "+ Add Step" ]
-                , div [ class "edit-actions" ]
-                    [ button [ onClick SaveDraft ] [ text "Save Draft" ]
-                    , button [ onClick ClearChanges ] [ text "Clear Changes" ]
-                    , button [ onClick SwitchToViewMode ] [ text "Done Editing" ]
+                , button
+                    [ onClick AddStep
+                    , class "mdc-button"
+                    , style "margin-bottom" "16px"
+                    ]
+                    [ text "+ Add Step" ]
+                , div
+                    [ style "display" "flex"
+                    , style "gap" "8px"
+                    ]
+                    [ button [ onClick SaveDraft, class "mdc-button mdc-button--raised" ] [ text "Save Draft" ]
+                    , button [ onClick ClearChanges, class "mdc-button" ] [ text "Clear Changes" ]
+                    , button [ onClick SwitchToViewMode, class "mdc-button" ] [ text "Done Editing" ]
                     ]
                 ]
 
 
 viewEditableStep : Model -> Int -> TestStep -> Html Msg
 viewEditableStep model index step =
-    div [ class "editable-step" ]
-        [ input
+    div
+        [ style "border" "1px solid #e0e0e0"
+        , style "border-radius" "4px"
+        , style "padding" "16px"
+        , style "margin-bottom" "12px"
+        ]
+        [ Components.viewFormField "Step Name"
             [ type_ "text"
             , placeholder "Step name"
             , value step.name
             , onInput (UpdateStepName index)
-            , class "step-name-input"
             ]
-            []
-        , textarea
+        , Components.viewTextArea "Instructions"
             [ placeholder "Instructions"
             , value step.instructions
             , onInput (UpdateStepInstructions index)
-            , class "step-instructions-input"
             ]
-            []
-        , div [ class "image-upload-zone" ]
+        , div [ style "margin-bottom" "12px" ]
             [ input
                 [ type_ "file"
                 , Html.Attributes.accept "image/*"
@@ -772,22 +841,42 @@ viewEditableStep model index step =
                 ]
                 []
             , if Dict.member index model.uploadingImages then
-                span [ class "uploading" ] [ text "Uploading..." ]
+                span [ class "mdc-typography--caption", style "margin-left" "8px" ] [ text "Uploading..." ]
 
               else
                 text ""
             ]
-        , div [ class "step-images" ]
+        , div
+            [ style "display" "flex"
+            , style "flex-wrap" "wrap"
+            , style "gap" "8px"
+            , style "margin-bottom" "12px"
+            ]
             (List.indexedMap
                 (\imgIdx path ->
-                    div [ class "step-image-item" ]
-                        [ Html.img [ Html.Attributes.src ("/uploads/" ++ path), style "max-width" "100px" ] []
-                        , button [ onClick (RemoveStepImage index imgIdx), class "remove-image-btn" ] [ text "×" ]
+                    div []
+                        [ Html.img
+                            [ Html.Attributes.src ("/uploads/" ++ path)
+                            , style "max-width" "100px"
+                            , style "border-radius" "4px"
+                            ]
+                            []
+                        , button
+                            [ onClick (RemoveStepImage index imgIdx)
+                            , class "mdc-button"
+                            , style "display" "block"
+                            ]
+                            [ text "Remove" ]
                         ]
                 )
                 step.imagePaths
             )
-        , button [ onClick (RemoveStep index), class "remove-step-btn" ] [ text "Delete Step" ]
+        , button
+            [ onClick (RemoveStep index)
+            , class "mdc-button"
+            , style "color" "#d32f2f"
+            ]
+            [ text "Delete Step" ]
         ]
 
 
@@ -798,31 +887,38 @@ fileDecoder =
 
 viewNewVersionMode : Model -> Html Msg
 viewNewVersionMode model =
-    div [ class "new-version-mode" ]
-        [ h3 [] [ text "Review Changes" ]
-        , div [ class "diff-view" ]
-            [ div [ class "diff-column" ]
-                [ h4 [] [ text "Current Version" ]
+    div []
+        [ h3 [ class "mdc-typography--headline5" ] [ text "Review Changes" ]
+        , div
+            [ style "display" "flex"
+            , style "gap" "16px"
+            ]
+            [ div [ style "flex" "1" ]
+                [ h4 [ class "mdc-typography--subtitle1" ] [ text "Current Version" ]
                 , case model.committedProcedure of
                     Just committed ->
                         viewSteps committed.steps
 
                     Nothing ->
-                        p [] [ text "No published version" ]
+                        p [ class "mdc-typography--body1" ] [ text "No published version" ]
                 ]
-            , div [ class "diff-column" ]
-                [ h4 [] [ text "Draft Changes" ]
+            , div [ style "flex" "1" ]
+                [ h4 [ class "mdc-typography--subtitle1" ] [ text "Draft Changes" ]
                 , case model.draftProcedure of
                     Just draft ->
                         viewSteps draft.steps
 
                     Nothing ->
-                        p [] [ text "No draft" ]
+                        p [ class "mdc-typography--body1" ] [ text "No draft" ]
                 ]
             ]
-        , div [ class "version-actions" ]
-            [ button [ onClick SwitchToViewMode ] [ text "Cancel" ]
-            , button [ onClick CommitVersion, class "commit-btn" ] [ text "Create New Version" ]
+        , div
+            [ style "display" "flex"
+            , style "gap" "8px"
+            , style "margin-top" "16px"
+            ]
+            [ button [ onClick SwitchToViewMode, class "mdc-button" ] [ text "Cancel" ]
+            , button [ onClick CommitVersion, class "mdc-button mdc-button--raised" ] [ text "Create New Version" ]
             ]
         ]
 
@@ -834,6 +930,8 @@ viewError maybeError =
             text ""
 
         Just errorMsg ->
-            div [ class "error-message" ]
-                [ text errorMsg
+            div
+                [ style "color" "red"
+                , style "margin-top" "16px"
                 ]
+                [ text errorMsg ]
