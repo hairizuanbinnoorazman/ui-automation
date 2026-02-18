@@ -42,7 +42,7 @@ docker-build-elm:
 # Start Docker Compose with dev setup (checks for elm.js first)
 docker-dev: docker-check-elm
 	docker compose down
-	docker compose up -d
+	docker compose up -d --build
 
 # Rebuild elm.js and restart frontend container
 docker-rebuild-elm: docker-build-elm
