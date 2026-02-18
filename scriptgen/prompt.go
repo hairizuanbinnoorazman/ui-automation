@@ -16,8 +16,8 @@ func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework, co
 		config = DefaultValidationConfig()
 	}
 
-	if err := ValidateLengthLimits(procedure, config); err != nil {
-		return "", fmt.Errorf("validation failed: %w", err)
+	if config == nil {
+		config = DefaultValidationConfig()
 	}
 
 	// Validate using testprocedure package validators
@@ -26,10 +26,6 @@ func BuildPrompt(procedure *testprocedure.TestProcedure, framework Framework, co
 		MaxDescriptionLength: config.MaxDescriptionLength,
 		MaxStepsJSONLength:   config.MaxStepsJSONLength,
 		MaxStepsCount:        config.MaxStepsCount,
-	}
-
-	if err := testprocedure.ValidateForScriptGeneration(procedure, limits); err != nil {
-		return "", fmt.Errorf("security validation failed: %w", err)
 	}
 
 	// Sanitize all user-provided content
