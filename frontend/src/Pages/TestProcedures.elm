@@ -20,6 +20,12 @@ type ProcedureViewMode
     | NewVersionMode
 
 
+type alias CreateDialogState =
+    { name : String
+    , description : String
+    }
+
+
 type alias Model =
     { projectId : String
     , procedures : List TestProcedure
@@ -36,6 +42,7 @@ type alias Model =
     , committedLoading : Bool
     , loading : Bool
     , error : Maybe String
+    , createDialog : Maybe CreateDialogState
     }
 
 
@@ -56,6 +63,7 @@ init projectId =
       , committedLoading = False
       , loading = False
       , error = Nothing
+      , createDialog = Nothing
       }
     , API.getTestProcedures projectId 10 0 ProceduresResponse
     )
@@ -68,6 +76,12 @@ init projectId =
 type Msg
     = ProceduresResponse (Result Http.Error (PaginatedResponse TestProcedure))
     | LoadPage Int
+    | OpenCreateDialog
+    | CloseCreateDialog
+    | SetCreateName String
+    | SetCreateDescription String
+    | SubmitCreate
+    | CreateResponse (Result Http.Error TestProcedure)
     | SelectProcedure TestProcedure
     | SwitchToViewMode
     | SwitchToEditMode
@@ -114,6 +128,60 @@ update msg model =
             ( { model | offset = offset, loading = True }
             , API.getTestProcedures model.projectId model.limit offset ProceduresResponse
             )
+
+        OpenCreateDialog ->
+            ( { model | createDialog = Just { name = "", description = "" } }
+            , Cmd.none
+            )
+
+        CloseCreateDialog ->
+            ( { model | createDialog = Nothing }
+            , Cmd.none
+            )
+
+        SetCreateName name ->
+            case model.createDialog of
+                Just dialog ->
+                    ( { model | createDialog = Just { dialog | name = name } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetCreateDescription description ->
+            case model.createDialog of
+                Just dialog ->
+                    ( { model | createDialog = Just { dialog | description = description } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SubmitCreate ->
+            case model.createDialog of
+                Just dialog ->
+                    ( { model | loading = True, error = Nothing }
+                    , API.createTestProcedure model.projectId
+                        { name = dialog.name, description = dialog.description, steps = [] }
+                        CreateResponse
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        CreateResponse result ->
+            case result of
+                Ok _ ->
+                    ( { model | createDialog = Nothing, loading = False }
+                    , API.getTestProcedures model.projectId model.limit model.offset ProceduresResponse
+                    )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to create procedure", loading = False }
+                    , Cmd.none
+                    )
 
         SelectProcedure procedure ->
             ( { model
@@ -416,13 +484,59 @@ view model =
             [ viewProcedureList model
             , viewSelectedProcedure model
             ]
+        , case model.createDialog of
+            Just dialog ->
+                viewCreateDialog dialog
+
+            Nothing ->
+                text ""
+        ]
+
+
+viewCreateDialog : CreateDialogState -> Html Msg
+viewCreateDialog dialog =
+    div [ class "dialog-overlay" ]
+        [ div [ class "dialog" ]
+            [ h3 [] [ text "Create Procedure" ]
+            , div [ class "dialog-field" ]
+                [ label [] [ text "Name" ]
+                , input
+                    [ type_ "text"
+                    , placeholder "Procedure name"
+                    , value dialog.name
+                    , onInput SetCreateName
+                    ]
+                    []
+                ]
+            , div [ class "dialog-field" ]
+                [ label [] [ text "Description" ]
+                , input
+                    [ type_ "text"
+                    , placeholder "Procedure description"
+                    , value dialog.description
+                    , onInput SetCreateDescription
+                    ]
+                    []
+                ]
+            , div [ class "dialog-actions" ]
+                [ button
+                    [ onClick SubmitCreate
+                    , disabled (String.isEmpty dialog.name)
+                    ]
+                    [ text "Create" ]
+                , button [ onClick CloseCreateDialog ] [ text "Cancel" ]
+                ]
+            ]
         ]
 
 
 viewProcedureList : Model -> Html Msg
 viewProcedureList model =
     div [ class "procedures-list" ]
-        [ h3 [] [ text "Procedures" ]
+        [ div [ class "procedures-list-header" ]
+            [ h3 [] [ text "Procedures" ]
+            , button [ onClick OpenCreateDialog, class "create-procedure-btn" ] [ text "+ New Procedure" ]
+            ]
         , if List.isEmpty model.procedures then
             p [] [ text "No procedures found" ]
 
@@ -457,7 +571,7 @@ viewPagination model =
             , disabled (currentPage == 0)
             ]
             [ text "Previous" ]
-        , span [] [ text ("Page " ++ String.fromInt (currentPage + 1) ++ " of " ++ String.fromInt totalPages) ]
+        , span [] [ text ("Page " ++ String.fromInt (currentPage + 1) ++ " of " ++ String.fromInt (max 1 totalPages)) ]
         , button
             [ onClick (LoadPage (model.offset + model.limit))
             , disabled (currentPage >= totalPages - 1)
