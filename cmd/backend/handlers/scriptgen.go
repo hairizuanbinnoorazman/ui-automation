@@ -73,7 +73,7 @@ func (h *ScriptGenHandler) verifyProcedureOwnership(
 	// Fetch the project to verify ownership
 	proj, err := h.projectStore.GetByID(ctx, procedure.ProjectID)
 	if err != nil {
-		if err == project.ErrProjectNotFound {
+		if errors.Is(err, project.ErrProjectNotFound) {
 			respondError(w, http.StatusNotFound, "project not found")
 			return nil, false
 		}

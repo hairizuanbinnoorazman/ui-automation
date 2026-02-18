@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -57,7 +58,7 @@ func (m *ProjectAuthorizationMiddleware) Handler(next http.Handler) http.Handler
 		// Get project
 		proj, err := m.projectStore.GetByID(r.Context(), id)
 		if err != nil {
-			if err == project.ErrProjectNotFound {
+			if errors.Is(err, project.ErrProjectNotFound) {
 				respondError(w, http.StatusNotFound, "project not found")
 				return
 			}
