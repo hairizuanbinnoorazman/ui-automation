@@ -618,6 +618,11 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "guide-"+id.String()+".zip"))
 	zw := zip.NewWriter(w)
+	defer func() {
+		if err := zw.Close(); err != nil {
+			h.logger.Error(ctx, "failed to close zip writer", map[string]interface{}{"error": err.Error()})
+		}
+	}()
 
 	// Write guide.md
 	guideWriter, err := zw.Create("guide.md")
@@ -657,9 +662,6 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 		reader.Close()
 	}
 
-	if err := zw.Close(); err != nil {
-		h.logger.Error(ctx, "failed to close zip writer", map[string]interface{}{"error": err.Error()})
-	}
 }
 
 // sanitizeFilename removes potentially dangerous characters from filenames.
