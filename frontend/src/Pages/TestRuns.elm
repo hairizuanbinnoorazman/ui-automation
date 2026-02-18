@@ -1,6 +1,7 @@
 module Pages.TestRuns exposing (Model, Msg, init, update, view)
 
 import API
+import Components
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -545,17 +546,11 @@ viewPagination model =
 
 viewCreateDialog : CreateDialogState -> Html Msg
 viewCreateDialog dialog =
-    viewDialogOverlay "Create Test Run"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Notes" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.notes
-                , Html.Events.onInput SetCreateNotes
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+    Components.viewDialogOverlay "Create Test Run"
+        [ Components.viewFormField "Notes"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.notes
+            , Html.Events.onInput SetCreateNotes
             ]
         ]
         [ Html.button
@@ -573,41 +568,30 @@ viewCreateDialog dialog =
 
 viewCompleteDialog : CompleteDialogState -> Html Msg
 viewCompleteDialog dialog =
-    viewDialogOverlay "Complete Test Run"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Status" ]
-            , Html.select
-                [ Html.Events.onInput SetCompleteStatus
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                [ Html.option
-                    [ Html.Attributes.value "passed"
-                    , Html.Attributes.selected (dialog.status == Types.Passed)
-                    ]
-                    [ Html.text "Passed" ]
-                , Html.option
-                    [ Html.Attributes.value "failed"
-                    , Html.Attributes.selected (dialog.status == Types.Failed)
-                    ]
-                    [ Html.text "Failed" ]
-                , Html.option
-                    [ Html.Attributes.value "skipped"
-                    , Html.Attributes.selected (dialog.status == Types.Skipped)
-                    ]
-                    [ Html.text "Skipped" ]
-                ]
+    Components.viewDialogOverlay "Complete Test Run"
+        [ Components.viewSelectField "Status"
+            [ Html.Events.onInput SetCompleteStatus
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Notes" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.notes
-                , Html.Events.onInput SetCompleteNotes
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
+            [ Html.option
+                [ Html.Attributes.value "passed"
+                , Html.Attributes.selected (dialog.status == Types.Passed)
                 ]
-                []
+                [ Html.text "Passed" ]
+            , Html.option
+                [ Html.Attributes.value "failed"
+                , Html.Attributes.selected (dialog.status == Types.Failed)
+                ]
+                [ Html.text "Failed" ]
+            , Html.option
+                [ Html.Attributes.value "skipped"
+                , Html.Attributes.selected (dialog.status == Types.Skipped)
+                ]
+                [ Html.text "Skipped" ]
+            ]
+        , Components.viewFormField "Notes"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.notes
+            , Html.Events.onInput SetCompleteNotes
             ]
         ]
         [ Html.button
@@ -753,36 +737,3 @@ assetTypeToString assetType =
 
         Types.Document ->
             "Document"
-
-
-viewDialogOverlay : String -> List (Html Msg) -> List (Html Msg) -> Html Msg
-viewDialogOverlay title content actions =
-    Html.div
-        [ Html.Attributes.style "position" "fixed"
-        , Html.Attributes.style "top" "0"
-        , Html.Attributes.style "left" "0"
-        , Html.Attributes.style "width" "100%"
-        , Html.Attributes.style "height" "100%"
-        , Html.Attributes.style "background-color" "rgba(0,0,0,0.5)"
-        , Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "justify-content" "center"
-        , Html.Attributes.style "align-items" "center"
-        , Html.Attributes.style "z-index" "1000"
-        ]
-        [ Html.div
-            [ Html.Attributes.class "mdc-dialog__surface"
-            , Html.Attributes.style "background" "white"
-            , Html.Attributes.style "padding" "24px"
-            , Html.Attributes.style "border-radius" "4px"
-            , Html.Attributes.style "min-width" "400px"
-            ]
-            [ Html.h2 [ Html.Attributes.class "mdc-typography--headline6" ] [ Html.text title ]
-            , Html.div [ Html.Attributes.style "margin" "20px 0" ] content
-            , Html.div
-                [ Html.Attributes.style "display" "flex"
-                , Html.Attributes.style "justify-content" "flex-end"
-                , Html.Attributes.style "gap" "8px"
-                ]
-                actions
-            ]
-        ]

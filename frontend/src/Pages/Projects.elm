@@ -1,6 +1,7 @@
 module Pages.Projects exposing (Model, Msg, init, update, view)
 
 import API
+import Components
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -421,30 +422,18 @@ viewCreateDialog : Maybe DialogState -> Html Msg
 viewCreateDialog maybeDialog =
     case maybeDialog of
         Just dialog ->
-            viewDialogOverlay "Create Project"
-                [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-                    [ Html.label [] [ Html.text "Name" ]
-                    , Html.input
-                        [ Html.Attributes.type_ "text"
-                        , Html.Attributes.value dialog.name
-                        , Html.Events.onInput SetCreateName
-                        , Html.Attributes.required True
-                        , Html.Attributes.style "width" "100%"
-                        , Html.Attributes.style "padding" "8px"
-                        ]
-                        []
+            Components.viewDialogOverlay "Create Project"
+                [ Components.viewFormField "Name"
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value dialog.name
+                    , Html.Events.onInput SetCreateName
+                    , Html.Attributes.required True
                     ]
-                , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-                    [ Html.label [] [ Html.text "Description" ]
-                    , Html.input
-                        [ Html.Attributes.type_ "text"
-                        , Html.Attributes.value dialog.description
-                        , Html.Events.onInput SetCreateDescription
-                        , Html.Attributes.required True
-                        , Html.Attributes.style "width" "100%"
-                        , Html.Attributes.style "padding" "8px"
-                        ]
-                        []
+                , Components.viewFormField "Description"
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value dialog.description
+                    , Html.Events.onInput SetCreateDescription
+                    , Html.Attributes.required True
                     ]
                 ]
                 [ Html.button
@@ -465,30 +454,18 @@ viewCreateDialog maybeDialog =
 
 viewEditDialog : EditDialogState -> Html Msg
 viewEditDialog dialog =
-    viewDialogOverlay "Edit Project"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Name" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.name
-                , Html.Events.onInput SetEditName
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+    Components.viewDialogOverlay "Edit Project"
+        [ Components.viewFormField "Name"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.name
+            , Html.Events.onInput SetEditName
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Description" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.description
-                , Html.Events.onInput SetEditDescription
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Description"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.description
+            , Html.Events.onInput SetEditDescription
+            , Html.Attributes.required True
             ]
         ]
         [ Html.button
@@ -506,7 +483,7 @@ viewEditDialog dialog =
 
 viewDeleteDialog : Project -> Html Msg
 viewDeleteDialog project =
-    viewDialogOverlay "Delete Project"
+    Components.viewDialogOverlay "Delete Project"
         [ Html.div []
             [ Html.text ("Are you sure you want to delete \"" ++ project.name ++ "\"?")
             ]
@@ -521,39 +498,6 @@ viewDeleteDialog project =
             , Html.Attributes.class "mdc-button mdc-button--raised"
             ]
             [ Html.text "Delete" ]
-        ]
-
-
-viewDialogOverlay : String -> List (Html Msg) -> List (Html Msg) -> Html Msg
-viewDialogOverlay title content actions =
-    Html.div
-        [ Html.Attributes.style "position" "fixed"
-        , Html.Attributes.style "top" "0"
-        , Html.Attributes.style "left" "0"
-        , Html.Attributes.style "width" "100%"
-        , Html.Attributes.style "height" "100%"
-        , Html.Attributes.style "background-color" "rgba(0,0,0,0.5)"
-        , Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "justify-content" "center"
-        , Html.Attributes.style "align-items" "center"
-        , Html.Attributes.style "z-index" "1000"
-        ]
-        [ Html.div
-            [ Html.Attributes.class "mdc-dialog__surface"
-            , Html.Attributes.style "background" "white"
-            , Html.Attributes.style "padding" "24px"
-            , Html.Attributes.style "border-radius" "4px"
-            , Html.Attributes.style "min-width" "400px"
-            ]
-            [ Html.h2 [ Html.Attributes.class "mdc-typography--headline6" ] [ Html.text title ]
-            , Html.div [ Html.Attributes.style "margin" "20px 0" ] content
-            , Html.div
-                [ Html.Attributes.style "display" "flex"
-                , Html.Attributes.style "justify-content" "flex-end"
-                , Html.Attributes.style "gap" "8px"
-                ]
-                actions
-            ]
         ]
 
 

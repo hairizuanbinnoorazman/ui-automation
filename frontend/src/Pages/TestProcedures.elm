@@ -1,12 +1,15 @@
 module Pages.TestProcedures exposing (Model, Msg, init, update, view)
 
 import API
+import Components
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Time
-import Types exposing (PaginatedResponse, TestProcedure, TestProcedureInput, TestStep)
+import Types exposing (PaginatedResponse, TestProcedure, TestProcedureInput, TestStep, testStepDecoder, testStepEncoder)
 
 
 
@@ -32,6 +35,7 @@ type alias CreateDialogState =
     { name : String
     , description : String
     , stepsJson : String
+    , error : Maybe String
     }
 
 
@@ -40,6 +44,7 @@ type alias EditDialogState =
     , name : String
     , description : String
     , stepsJson : String
+    , error : Maybe String
     }
 
 
@@ -134,6 +139,7 @@ update msg model =
                         { name = ""
                         , description = ""
                         , stepsJson = "[]"
+                        , error = Nothing
                         }
               }
             , Cmd.none
@@ -147,7 +153,7 @@ update msg model =
         SetCreateName name ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | createDialog = Just { dialog | name = name } }
+                    ( { model | createDialog = Just { dialog | name = name, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -157,7 +163,7 @@ update msg model =
         SetCreateDescription description ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | createDialog = Just { dialog | description = description } }
+                    ( { model | createDialog = Just { dialog | description = description, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -167,7 +173,7 @@ update msg model =
         SetCreateStepsJson stepsJson ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | createDialog = Just { dialog | stepsJson = stepsJson } }
+                    ( { model | createDialog = Just { dialog | stepsJson = stepsJson, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -177,15 +183,24 @@ update msg model =
         SubmitCreate ->
             case model.createDialog of
                 Just dialog ->
-                    ( { model | loading = True }
-                    , API.createTestProcedure
-                        model.projectId
-                        { name = dialog.name
-                        , description = dialog.description
-                        , steps = []
-                        }
-                        CreateResponse
-                    )
+                    case parseStepsJson dialog.stepsJson of
+                        Err err ->
+                            ( { model
+                                | createDialog = Just { dialog | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err) }
+                              }
+                            , Cmd.none
+                            )
+
+                        Ok parsedSteps ->
+                            ( { model | loading = True }
+                            , API.createTestProcedure
+                                model.projectId
+                                { name = dialog.name
+                                , description = dialog.description
+                                , steps = parsedSteps
+                                }
+                                CreateResponse
+                            )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -214,6 +229,7 @@ update msg model =
                         , name = procedure.name
                         , description = procedure.description
                         , stepsJson = stepsToJson procedure.steps
+                        , error = Nothing
                         }
               }
             , Cmd.none
@@ -227,7 +243,7 @@ update msg model =
         SetEditName name ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | editDialog = Just { dialog | name = name } }
+                    ( { model | editDialog = Just { dialog | name = name, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -237,7 +253,7 @@ update msg model =
         SetEditDescription description ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | editDialog = Just { dialog | description = description } }
+                    ( { model | editDialog = Just { dialog | description = description, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -247,7 +263,7 @@ update msg model =
         SetEditStepsJson stepsJson ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | editDialog = Just { dialog | stepsJson = stepsJson } }
+                    ( { model | editDialog = Just { dialog | stepsJson = stepsJson, error = Nothing } }
                     , Cmd.none
                     )
 
@@ -257,16 +273,25 @@ update msg model =
         SubmitEdit ->
             case model.editDialog of
                 Just dialog ->
-                    ( { model | loading = True }
-                    , API.updateTestProcedure
-                        model.projectId
-                        dialog.procedure.id
-                        { name = dialog.name
-                        , description = dialog.description
-                        , steps = dialog.procedure.steps
-                        }
-                        EditResponse
-                    )
+                    case parseStepsJson dialog.stepsJson of
+                        Err err ->
+                            ( { model
+                                | editDialog = Just { dialog | error = Just ("Invalid steps JSON: " ++ Decode.errorToString err) }
+                              }
+                            , Cmd.none
+                            )
+
+                        Ok parsedSteps ->
+                            ( { model | loading = True }
+                            , API.updateTestProcedure
+                                model.projectId
+                                dialog.procedure.id
+                                { name = dialog.name
+                                , description = dialog.description
+                                , steps = parsedSteps
+                                }
+                                EditResponse
+                            )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -509,42 +534,38 @@ viewPagination model =
 
 viewCreateDialog : CreateDialogState -> Html Msg
 viewCreateDialog dialog =
-    viewDialogOverlay "Create Test Procedure"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Name" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.name
-                , Html.Events.onInput SetCreateName
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+    Components.viewDialogOverlay "Create Test Procedure"
+        [ case dialog.error of
+            Just err ->
+                Html.div
+                    [ Html.Attributes.style "color" "red"
+                    , Html.Attributes.style "background-color" "#ffebee"
+                    , Html.Attributes.style "padding" "12px"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    , Html.Attributes.style "border" "1px solid #ffcdd2"
+                    ]
+                    [ Html.text err ]
+
+            Nothing ->
+                Html.text ""
+        , Components.viewFormField "Name"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.name
+            , Html.Events.onInput SetCreateName
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Description" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.description
-                , Html.Events.onInput SetCreateDescription
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Description"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.description
+            , Html.Events.onInput SetCreateDescription
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Steps (JSON)" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.stepsJson
-                , Html.Events.onInput SetCreateStepsJson
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Steps (JSON)"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.stepsJson
+            , Html.Events.onInput SetCreateStepsJson
+            , Html.Attributes.required True
             ]
         ]
         [ Html.button
@@ -562,42 +583,38 @@ viewCreateDialog dialog =
 
 viewEditDialog : EditDialogState -> Html Msg
 viewEditDialog dialog =
-    viewDialogOverlay "Edit Test Procedure"
-        [ Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Name" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.name
-                , Html.Events.onInput SetEditName
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+    Components.viewDialogOverlay "Edit Test Procedure"
+        [ case dialog.error of
+            Just err ->
+                Html.div
+                    [ Html.Attributes.style "color" "red"
+                    , Html.Attributes.style "background-color" "#ffebee"
+                    , Html.Attributes.style "padding" "12px"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    , Html.Attributes.style "border" "1px solid #ffcdd2"
+                    ]
+                    [ Html.text err ]
+
+            Nothing ->
+                Html.text ""
+        , Components.viewFormField "Name"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.name
+            , Html.Events.onInput SetEditName
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Description" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.description
-                , Html.Events.onInput SetEditDescription
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Description"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.description
+            , Html.Events.onInput SetEditDescription
+            , Html.Attributes.required True
             ]
-        , Html.div [ Html.Attributes.style "margin-bottom" "16px" ]
-            [ Html.label [] [ Html.text "Steps (JSON)" ]
-            , Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value dialog.stepsJson
-                , Html.Events.onInput SetEditStepsJson
-                , Html.Attributes.required True
-                , Html.Attributes.style "width" "100%"
-                , Html.Attributes.style "padding" "8px"
-                ]
-                []
+        , Components.viewFormField "Steps (JSON)"
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value dialog.stepsJson
+            , Html.Events.onInput SetEditStepsJson
+            , Html.Attributes.required True
             ]
         ]
         [ Html.button
@@ -615,7 +632,7 @@ viewEditDialog dialog =
 
 viewVersionsDialog : VersionsDialogState -> Html Msg
 viewVersionsDialog dialog =
-    viewDialogOverlay ("Version History: " ++ dialog.procedure.name)
+    Components.viewDialogOverlay ("Version History: " ++ dialog.procedure.name)
         [ Html.div []
             [ if List.isEmpty dialog.versions then
                 Html.text "Loading versions..."
@@ -744,39 +761,29 @@ monthToInt month =
             12
 
 
+-- Decode array of steps from JSON string
+stepsDecoder : Decode.Decoder (List TestStep)
+stepsDecoder =
+    Decode.list testStepDecoder
+
+
+-- Parse JSON string to List TestStep
+parseStepsJson : String -> Result Decode.Error (List TestStep)
+parseStepsJson jsonString =
+    let
+        trimmed =
+            String.trim jsonString
+    in
+    if String.isEmpty trimmed then
+        Ok []
+
+    else
+        Decode.decodeString stepsDecoder trimmed
+
+
+-- Convert list of steps to formatted JSON string
 stepsToJson : List TestStep -> String
 stepsToJson steps =
-    "[]"
-
-
-viewDialogOverlay : String -> List (Html Msg) -> List (Html Msg) -> Html Msg
-viewDialogOverlay title content actions =
-    Html.div
-        [ Html.Attributes.style "position" "fixed"
-        , Html.Attributes.style "top" "0"
-        , Html.Attributes.style "left" "0"
-        , Html.Attributes.style "width" "100%"
-        , Html.Attributes.style "height" "100%"
-        , Html.Attributes.style "background-color" "rgba(0,0,0,0.5)"
-        , Html.Attributes.style "display" "flex"
-        , Html.Attributes.style "justify-content" "center"
-        , Html.Attributes.style "align-items" "center"
-        , Html.Attributes.style "z-index" "1000"
-        ]
-        [ Html.div
-            [ Html.Attributes.class "mdc-dialog__surface"
-            , Html.Attributes.style "background" "white"
-            , Html.Attributes.style "padding" "24px"
-            , Html.Attributes.style "border-radius" "4px"
-            , Html.Attributes.style "min-width" "400px"
-            ]
-            [ Html.h2 [ Html.Attributes.class "mdc-typography--headline6" ] [ Html.text title ]
-            , Html.div [ Html.Attributes.style "margin" "20px 0" ] content
-            , Html.div
-                [ Html.Attributes.style "display" "flex"
-                , Html.Attributes.style "justify-content" "flex-end"
-                , Html.Attributes.style "gap" "8px"
-                ]
-                actions
-            ]
-        ]
+    steps
+        |> Encode.list testStepEncoder
+        |> Encode.encode 2
