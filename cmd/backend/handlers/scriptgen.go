@@ -19,6 +19,10 @@ import (
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 )
 
+// generatingTimeout is the maximum time a script may remain in StatusGenerating
+// before it is considered stuck and eligible for regeneration.
+const generatingTimeout = 10 * time.Minute
+
 // ScriptGenHandler handles script generation requests.
 type ScriptGenHandler struct {
 	scriptStore    scriptgen.Store
@@ -154,14 +158,42 @@ func (h *ScriptGenHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	// Check if script already exists (including any in-progress generation)
 	existingScript, err := h.scriptStore.GetByProcedureAndFramework(ctx, procedureID, req.Framework)
 	if err == nil {
-		h.logger.Info(ctx, "script already exists, returning existing script", map[string]interface{}{
-			"script_id":         existingScript.ID.String(),
-			"test_procedure_id": procedureID.String(),
-			"framework":         req.Framework,
-			"status":            existingScript.GenerationStatus,
-		})
-		respondJSON(w, http.StatusOK, existingScript)
-		return
+		isStuckGenerating := existingScript.GenerationStatus == scriptgen.StatusGenerating &&
+			time.Since(existingScript.GeneratedAt) > generatingTimeout
+		isFailed := existingScript.GenerationStatus == scriptgen.StatusFailed
+
+		if isStuckGenerating || isFailed {
+			h.logger.Info(ctx, "deleting stale/failed script to allow regeneration", map[string]interface{}{
+				"script_id": existingScript.ID.String(),
+				"status":    existingScript.GenerationStatus,
+				"age":       time.Since(existingScript.GeneratedAt).String(),
+			})
+			// Best-effort cleanup of any partially uploaded artifact.
+			if delErr := h.storage.Delete(ctx, existingScript.ScriptPath); delErr != nil {
+				h.logger.Warn(ctx, "failed to cleanup stale script from storage", map[string]interface{}{
+					"delete_error": delErr.Error(),
+					"path":         existingScript.ScriptPath,
+				})
+			}
+			if deleteErr := h.scriptStore.Delete(ctx, existingScript.ID); deleteErr != nil {
+				h.logger.Error(ctx, "failed to delete stale script record", map[string]interface{}{
+					"error":     deleteErr.Error(),
+					"script_id": existingScript.ID.String(),
+				})
+				respondError(w, http.StatusInternalServerError, "failed to cleanup stale script")
+				return
+			}
+			// Fall through to create a new record.
+		} else {
+			h.logger.Info(ctx, "script already exists, returning existing script", map[string]interface{}{
+				"script_id":         existingScript.ID.String(),
+				"test_procedure_id": procedureID.String(),
+				"framework":         req.Framework,
+				"status":            existingScript.GenerationStatus,
+			})
+			respondJSON(w, http.StatusOK, existingScript)
+			return
+		}
 	}
 
 	// If error is not "not found", return error
@@ -240,6 +272,16 @@ func (h *ScriptGenHandler) generateInBackground(
 			})
 		}
 	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			h.logger.Error(ctx, "panic in background script generation", map[string]interface{}{
+				"panic":     fmt.Sprintf("%v", r),
+				"script_id": scriptID.String(),
+			})
+			markFailed(fmt.Errorf("internal panic: %v", r))
+		}
+	}()
 
 	scriptContent, err := h.generator.Generate(ctx, procedure, framework)
 	if err != nil {
