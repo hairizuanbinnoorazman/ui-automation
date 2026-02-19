@@ -10,11 +10,12 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Session  SessionConfig
-	Storage  StorageConfig
-	Log      LogConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	Session   SessionConfig
+	Storage   StorageConfig
+	ScriptGen ScriptGenConfig
+	Log       LogConfig
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -51,6 +52,29 @@ type StorageConfig struct {
 	S3Bucket        string        // For S3: bucket name
 	S3Region        string        // For S3: AWS region
 	S3PresignExpiry time.Duration // Presigned URL expiration
+}
+
+// ScriptGenConfig holds script generation configuration.
+type ScriptGenConfig struct {
+	Provider   string                     // "bedrock" (future: "openai", "local")
+	Region     string                     // AWS region for Bedrock
+	ModelID    string                     // Bedrock model ID (e.g., "anthropic.claude-v2")
+	MaxTokens  int                        // Max tokens for generation
+	Validation ScriptGenValidationConfig  // Validation configuration
+	Monitoring ScriptGenMonitoringConfig  // Monitoring configuration
+}
+
+// ScriptGenValidationConfig holds validation limits for script generation.
+type ScriptGenValidationConfig struct {
+	MaxNameLength        int // Maximum length for procedure name
+	MaxDescriptionLength int // Maximum length for procedure description
+	MaxStepsJSONLength   int // Maximum length for serialized steps JSON
+	MaxStepsCount        int // Maximum number of steps in a procedure
+}
+
+// ScriptGenMonitoringConfig holds monitoring configuration for script generation.
+type ScriptGenMonitoringConfig struct {
+	LogSuspiciousPatterns bool // Whether to log suspicious patterns
 }
 
 // LogConfig holds logging configuration.
@@ -101,6 +125,16 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("storage.s3_region", "us-east-1")
 	v.SetDefault("storage.s3_presign_expiry", "15m")
 
+	v.SetDefault("script_gen.provider", "bedrock")
+	v.SetDefault("script_gen.region", "us-east-1")
+	v.SetDefault("script_gen.model_id", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+	v.SetDefault("script_gen.max_tokens", 4096)
+	v.SetDefault("script_gen.validation.max_name_length", 255)
+	v.SetDefault("script_gen.validation.max_description_length", 5000)
+	v.SetDefault("script_gen.validation.max_steps_json_length", 50000)
+	v.SetDefault("script_gen.validation.max_steps_count", 200)
+	v.SetDefault("script_gen.monitoring.log_suspicious_patterns", true)
+
 	v.SetDefault("log.level", "info")
 
 	// Read config file
@@ -137,6 +171,16 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Storage.S3Bucket = v.GetString("storage.s3_bucket")
 	config.Storage.S3Region = v.GetString("storage.s3_region")
 	config.Storage.S3PresignExpiry = v.GetDuration("storage.s3_presign_expiry")
+
+	config.ScriptGen.Provider = v.GetString("script_gen.provider")
+	config.ScriptGen.Region = v.GetString("script_gen.region")
+	config.ScriptGen.ModelID = v.GetString("script_gen.model_id")
+	config.ScriptGen.MaxTokens = v.GetInt("script_gen.max_tokens")
+	config.ScriptGen.Validation.MaxNameLength = v.GetInt("script_gen.validation.max_name_length")
+	config.ScriptGen.Validation.MaxDescriptionLength = v.GetInt("script_gen.validation.max_description_length")
+	config.ScriptGen.Validation.MaxStepsJSONLength = v.GetInt("script_gen.validation.max_steps_json_length")
+	config.ScriptGen.Validation.MaxStepsCount = v.GetInt("script_gen.validation.max_steps_count")
+	config.ScriptGen.Monitoring.LogSuspiciousPatterns = v.GetBool("script_gen.monitoring.log_suspicious_patterns")
 
 	config.Log.Level = v.GetString("log.level")
 
