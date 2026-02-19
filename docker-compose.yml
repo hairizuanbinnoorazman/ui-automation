@@ -6,9 +6,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: ui-automation-frontend
+    container_name: ui-automation-frontend${WORKSPACE_SUFFIX:-}
     ports:
-      - "8080:80"
+      - "${APP_PORT:-8080}:80"
     volumes:
       # Mount locally-built Elm application for live development
       # Rebuild with: cd frontend && elm make src/App.elm --output=elm.js
@@ -25,7 +25,7 @@ services:
     build:
       context: .
       dockerfile: cmd/backend/Dockerfile
-    container_name: ui-automation-backend
+    container_name: ui-automation-backend${WORKSPACE_SUFFIX:-}
     environment:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
@@ -60,7 +60,7 @@ services:
     build:
       context: .
       dockerfile: cmd/backend/Dockerfile
-    container_name: ui-automation-migrate
+    container_name: ui-automation-migrate${WORKSPACE_SUFFIX:-}
     environment:
       - DATABASE_HOST=mysql
       - DATABASE_PORT=3306
@@ -78,7 +78,7 @@ services:
   # MySQL database
   mysql:
     image: mysql:8
-    container_name: ui-automation-db
+    container_name: ui-automation-db${WORKSPACE_SUFFIX:-}
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: ui_automation
@@ -93,6 +93,8 @@ services:
 networks:
   ui-automation-network:
     driver: bridge
+    name: ui-automation-network${WORKSPACE_SUFFIX:-}
 
 volumes:
   uploads_data:
+    name: uploads_data${WORKSPACE_SUFFIX:-}
