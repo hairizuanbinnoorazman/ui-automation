@@ -96,6 +96,7 @@ type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url.Url
     | ToggleDrawer
+    | CloseDrawer
     | SessionCheckResponse (Result Http.Error User)
     | LoginMsg Login.Msg
     | RegisterMsg Register.Msg
@@ -252,6 +253,9 @@ update msg model =
 
         ToggleDrawer ->
             ( { model | drawerOpen = not model.drawerOpen }, Cmd.none )
+
+        CloseDrawer ->
+            ( { model | drawerOpen = False }, Cmd.none )
 
         LoginMsg subMsg ->
             let
@@ -441,22 +445,28 @@ view model =
                 }
             """ ]
         , viewTopAppBar model
-        , Html.div
-            [ Html.Attributes.class "mdc-drawer-app-content" ]
-            [ Html.div
-                [ Html.Attributes.style "display" "flex" ]
-                [ if model.user /= Nothing then
-                    viewDrawer model
-
-                  else
-                    Html.text ""
-                , Html.main_
-                    [ Html.Attributes.class "app-main-content"
-                    , Html.Attributes.style "flex-grow" "1"
-                    ]
-                    [ viewContent model ]
+        , if model.drawerOpen && model.user /= Nothing then
+            Html.div
+                [ Html.Events.onClick CloseDrawer
+                , Html.Attributes.style "position" "fixed"
+                , Html.Attributes.style "top" "0"
+                , Html.Attributes.style "left" "0"
+                , Html.Attributes.style "width" "100%"
+                , Html.Attributes.style "height" "100%"
+                , Html.Attributes.style "z-index" "50"
                 ]
-            ]
+                []
+
+          else
+            Html.text ""
+        , if model.user /= Nothing then
+            viewDrawer model
+
+          else
+            Html.text ""
+        , Html.main_
+            [ Html.Attributes.class "app-main-content" ]
+            [ viewContent model ]
         ]
     }
 
@@ -540,13 +550,19 @@ viewTopAppBar model =
 
 viewDrawer : Model -> Html Msg
 viewDrawer model =
-    Html.div
-        [ Html.Attributes.class "mdc-drawer mdc-drawer--dismissible"
-        , Html.Attributes.classList [ ( "mdc-drawer--open", model.drawerOpen ) ]
-        , Html.Attributes.style "width" "256px"
-        ]
-        [ Html.div [ Html.Attributes.class "mdc-drawer__content" ]
-            [ Html.nav [ Html.Attributes.class "mdc-list" ]
+    if model.drawerOpen then
+        Html.div
+            [ Html.Attributes.style "position" "fixed"
+            , Html.Attributes.style "top" "64px"
+            , Html.Attributes.style "left" "0"
+            , Html.Attributes.style "width" "256px"
+            , Html.Attributes.style "height" "calc(100% - 64px)"
+            , Html.Attributes.style "z-index" "60"
+            , Html.Attributes.style "background" "#fff"
+            , Html.Attributes.style "box-shadow" "2px 0 8px rgba(0,0,0,0.2)"
+            , Html.Attributes.style "overflow-y" "auto"
+            ]
+            [ Html.nav [ Html.Attributes.class "mdc-list", Html.Attributes.style "padding-top" "24px" ]
                 [ Html.a
                     [ Html.Attributes.href "/projects"
                     , Html.Attributes.class "mdc-list-item"
@@ -554,7 +570,9 @@ viewDrawer model =
                     [ Html.text "Projects" ]
                 ]
             ]
-        ]
+
+    else
+        Html.text ""
 
 
 viewContent : Model -> Html Msg
