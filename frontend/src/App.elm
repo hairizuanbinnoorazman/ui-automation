@@ -729,7 +729,7 @@ routeParser =
         [ Parser.map Login Parser.top
         , Parser.map Register (Parser.s "register")
         , Parser.map Projects (Parser.s "projects")
-        , Parser.map TestProcedures (Parser.s "projects" </> Parser.string </> Parser.s "procedures")
         , Parser.map ProcedureDetail (Parser.s "projects" </> Parser.string </> Parser.s "procedures" </> Parser.string)
+        , Parser.map TestProcedures (Parser.s "projects" </> Parser.string </> Parser.s "procedures")
         , Parser.map TestRuns (Parser.s "procedures" </> Parser.string </> Parser.s "runs")
         ]
