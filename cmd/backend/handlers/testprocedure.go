@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -578,6 +580,112 @@ func (h *TestProcedureHandler) ResetDraft(w http.ResponseWriter, r *http.Request
 	}
 
 	respondSuccess(w, "draft reset successfully")
+}
+
+// ExportMarkdown exports the latest committed procedure as a ZIP archive containing
+// procedure.md and an images/ folder with all step images.
+func (h *TestProcedureHandler) ExportMarkdown(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDOrRespond(w, r, "id", "test procedure")
+	if !ok {
+		return
+	}
+
+	if !h.checkProcedureOwnership(w, r, id) {
+		return
+	}
+
+	ctx := r.Context()
+
+	tp, err := h.testProcedureStore.GetLatestCommitted(ctx, id)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrNoCommittedVersion) {
+			respondError(w, http.StatusNotFound, "no committed version exists")
+			return
+		}
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return
+		}
+		h.logger.Error(ctx, "failed to get test procedure for export", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+		return
+	}
+
+	// Build procedure.md content with step-indexed image references to avoid name collisions
+	var md strings.Builder
+	fmt.Fprintf(&md, "# %s\n\n", tp.Name)
+	if tp.Description != "" {
+		fmt.Fprintf(&md, "%s\n\n", tp.Description)
+	}
+	for i, step := range tp.Steps {
+		fmt.Fprintf(&md, "## Step %d: %s\n\n", i+1, step.Name)
+		if step.Instructions != "" {
+			fmt.Fprintf(&md, "%s\n\n", step.Instructions)
+		}
+		for j, imagePath := range step.ImagePaths {
+			basename := filepath.Base(imagePath)
+			imgName := fmt.Sprintf("step%d_%d_%s", i+1, j+1, basename)
+			fmt.Fprintf(&md, "![%s](./images/%s)\n\n", step.Name, imgName)
+		}
+	}
+
+	// Build ZIP into a buffer so errors can still return proper HTTP responses
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	mdWriter, err := zw.Create("procedure.md")
+	if err != nil {
+		h.logger.Error(ctx, "failed to create procedure.md in zip", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to create zip")
+		return
+	}
+	if _, err := io.WriteString(mdWriter, md.String()); err != nil {
+		h.logger.Error(ctx, "failed to write procedure.md", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to create zip")
+		return
+	}
+
+	for i, step := range tp.Steps {
+		for j, imagePath := range step.ImagePaths {
+			reader, err := h.storage.Download(ctx, imagePath)
+			if err != nil {
+				h.logger.Warn(ctx, "failed to download step image for export", map[string]interface{}{
+					"error": err.Error(),
+					"path":  imagePath,
+				})
+				continue
+			}
+			basename := filepath.Base(imagePath)
+			imgName := fmt.Sprintf("step%d_%d_%s", i+1, j+1, basename)
+			imgWriter, err := zw.Create("images/" + imgName)
+			if err != nil {
+				reader.Close()
+				h.logger.Error(ctx, "failed to create image entry in zip", map[string]interface{}{"error": err.Error()})
+				respondError(w, http.StatusInternalServerError, "failed to create zip")
+				return
+			}
+			if _, err := io.Copy(imgWriter, reader); err != nil {
+				reader.Close()
+				h.logger.Error(ctx, "failed to write image to zip", map[string]interface{}{"error": err.Error()})
+				respondError(w, http.StatusInternalServerError, "failed to create zip")
+				return
+			}
+			reader.Close()
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		h.logger.Error(ctx, "failed to finalize zip", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to create zip")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "procedure-"+id.String()+".zip"))
+	w.Write(buf.Bytes())
 }
 
 // CommitDraft handles committing the draft as a new version.

@@ -188,6 +188,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/procedures/{id}/draft/reset", testProcedureHandler.ResetDraft).Methods("POST")
 	apiRouter.HandleFunc("/procedures/{id}/draft/commit", testProcedureHandler.CommitDraft).Methods("POST")
 
+	// Export operations
+	apiRouter.HandleFunc("/procedures/{id}/export/markdown", testProcedureHandler.ExportMarkdown).Methods("GET")
+
 	// Versioning operations
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.CreateVersion).Methods("POST")
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.GetVersionHistory).Methods("GET")
