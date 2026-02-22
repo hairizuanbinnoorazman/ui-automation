@@ -12,6 +12,7 @@ import Pages.ProcedureDetail as ProcedureDetail
 import Pages.Projects as Projects
 import Pages.Register as Register
 import Pages.TestProcedures as TestProcedures
+import Pages.TestRunDetail as TestRunDetail
 import Pages.TestRuns as TestRuns
 import Types exposing (User)
 import Url
@@ -51,6 +52,7 @@ type alias Model =
     , testProceduresModel : Maybe TestProcedures.Model
     , procedureDetailModel : Maybe ProcedureDetail.Model
     , testRunsModel : Maybe TestRuns.Model
+    , testRunDetailModel : Maybe TestRunDetail.Model
     }
 
 
@@ -61,6 +63,7 @@ type Route
     | TestProcedures String
     | ProcedureDetail String String
     | TestRuns String
+    | TestRunDetail String
     | NotFound
 
 
@@ -87,6 +90,7 @@ init _ url key =
       , testProceduresModel = Nothing
       , procedureDetailModel = Nothing
       , testRunsModel = Nothing
+      , testRunDetailModel = Nothing
       }
     , API.getMe SessionCheckResponse
     )
@@ -108,6 +112,7 @@ type Msg
     | TestProceduresMsg TestProcedures.Msg
     | ProcedureDetailMsg ProcedureDetail.Msg
     | TestRunsMsg TestRuns.Msg
+    | TestRunDetailMsg TestRunDetail.Msg
     | Logout
     | LogoutResponse (Result Http.Error ())
 
@@ -174,6 +179,15 @@ update msg model =
                             in
                             ( { model | testRunsModel = Just pm }
                             , Cmd.map TestRunsMsg pc
+                            )
+
+                        TestRunDetail runId ->
+                            let
+                                ( pm, pc ) =
+                                    TestRunDetail.init runId
+                            in
+                            ( { model | testRunDetailModel = Just pm }
+                            , Cmd.map TestRunDetailMsg pc
                             )
 
                         _ ->
@@ -266,6 +280,18 @@ update msg model =
                                 , testRunsModel = Just pm
                               }
                             , Cmd.map TestRunsMsg pc
+                            )
+
+                        TestRunDetail runId ->
+                            let
+                                ( pm, pc ) =
+                                    TestRunDetail.init runId
+                            in
+                            ( { model
+                                | user = Just user
+                                , testRunDetailModel = Just pm
+                              }
+                            , Cmd.map TestRunDetailMsg pc
                             )
 
                         NotFound ->
@@ -395,8 +421,32 @@ update msg model =
                         ( newModel, cmd ) =
                             TestRuns.update subMsg testRunsModel
                     in
-                    ( { model | testRunsModel = Just newModel }
-                    , Cmd.map TestRunsMsg cmd
+                    case newModel.navigationTarget of
+                        Just runId ->
+                            ( { model | testRunsModel = Just { newModel | navigationTarget = Nothing } }
+                            , Cmd.batch
+                                [ Cmd.map TestRunsMsg cmd
+                                , Nav.pushUrl model.key ("/runs/" ++ runId)
+                                ]
+                            )
+
+                        Nothing ->
+                            ( { model | testRunsModel = Just newModel }
+                            , Cmd.map TestRunsMsg cmd
+                            )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        TestRunDetailMsg subMsg ->
+            case model.testRunDetailModel of
+                Just testRunDetailModel ->
+                    let
+                        ( newModel, cmd ) =
+                            TestRunDetail.update subMsg testRunDetailModel
+                    in
+                    ( { model | testRunDetailModel = Just newModel }
+                    , Cmd.map TestRunDetailMsg cmd
                     )
 
                 Nothing ->
@@ -702,6 +752,19 @@ viewContent model =
                         Nothing ->
                             Html.map LoginMsg (Login.view model.loginModel)
 
+                TestRunDetail _ ->
+                    case model.user of
+                        Just _ ->
+                            case model.testRunDetailModel of
+                                Just testRunDetailModel ->
+                                    Html.map TestRunDetailMsg (TestRunDetail.view testRunDetailModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
                 NotFound ->
                     Html.div []
                         [ Html.h1 [] [ Html.text "404 Not Found" ]
@@ -732,4 +795,5 @@ routeParser =
         , Parser.map ProcedureDetail (Parser.s "projects" </> Parser.string </> Parser.s "procedures" </> Parser.string)
         , Parser.map TestProcedures (Parser.s "projects" </> Parser.string </> Parser.s "procedures")
         , Parser.map TestRuns (Parser.s "procedures" </> Parser.string </> Parser.s "runs")
+        , Parser.map TestRunDetail (Parser.s "runs" </> Parser.string)
         ]

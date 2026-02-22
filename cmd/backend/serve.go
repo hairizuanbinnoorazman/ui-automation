@@ -109,6 +109,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	testProcedureStore := testprocedure.NewMySQLStore(db, log)
 	testRunStore := testrun.NewMySQLStore(db, log)
 	assetStore := testrun.NewMySQLAssetStore(db, log)
+	stepNoteStore := testrun.NewMySQLStepNoteStore(db, log)
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -196,7 +197,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.GetVersionHistory).Methods("GET")
 
 	// Test Run routes (protected)
-	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, testProcedureStore, blobStorage, log)
+	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, testProcedureStore, projectStore, stepNoteStore, blobStorage, log)
 
 	// List and create runs for a procedure
 	apiRouter.HandleFunc("/procedures/{procedure_id}/runs", testRunHandler.List).Methods("GET")
@@ -216,6 +217,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/runs/{run_id}/assets", testRunHandler.ListAssets).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DownloadAsset).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DeleteAsset).Methods("DELETE")
+
+	// Procedure for a run
+	apiRouter.HandleFunc("/runs/{run_id}/procedure", testRunHandler.GetRunProcedure).Methods("GET")
+
+	// Step notes
+	apiRouter.HandleFunc("/runs/{run_id}/steps/notes", testRunHandler.GetStepNotes).Methods("GET")
+	apiRouter.HandleFunc("/runs/{run_id}/steps/{step_index}/notes", testRunHandler.SetStepNote).Methods("PUT")
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

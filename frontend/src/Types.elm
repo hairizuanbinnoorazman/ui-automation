@@ -115,8 +115,12 @@ type alias TestRun =
     }
 
 
-type alias TestRunInput =
-    { notes : String
+type alias TestRunStepNote =
+    { id : String
+    , testRunId : String
+    , stepIndex : Int
+    , notes : String
+    , createdAt : Time.Posix
     }
 
 
@@ -145,6 +149,7 @@ type alias TestRunAsset =
     , filepath : String
     , description : String
     , createdAt : Time.Posix
+    , stepIndex : Maybe Int
     }
 
 
@@ -287,16 +292,27 @@ assetTypeDecoder =
             )
 
 
+testRunStepNoteDecoder : Decoder TestRunStepNote
+testRunStepNoteDecoder =
+    Decode.map5 TestRunStepNote
+        (Decode.field "id" Decode.string)
+        (Decode.field "test_run_id" Decode.string)
+        (Decode.field "step_index" Decode.int)
+        (Decode.field "notes" Decode.string)
+        (Decode.field "created_at" timeDecoder)
+
+
 testRunAssetDecoder : Decoder TestRunAsset
 testRunAssetDecoder =
-    Decode.map7 TestRunAsset
+    Decode.map8 TestRunAsset
         (Decode.field "id" Decode.string)
         (Decode.field "test_run_id" Decode.string)
         (Decode.field "asset_type" assetTypeDecoder)
-        (Decode.field "filename" Decode.string)
-        (Decode.field "filepath" Decode.string)
-        (Decode.field "description" Decode.string)
-        (Decode.field "created_at" timeDecoder)
+        (Decode.field "file_name" Decode.string)
+        (Decode.field "asset_path" Decode.string)
+        (Decode.field "description" (Decode.oneOf [ Decode.string, Decode.succeed "" ]))
+        (Decode.field "uploaded_at" timeDecoder)
+        (Decode.maybe (Decode.field "step_index" Decode.int))
 
 
 paginatedDecoder : Decoder a -> Decoder (PaginatedResponse a)
@@ -357,13 +373,6 @@ testProcedureInputEncoder input =
         [ ( "name", Encode.string input.name )
         , ( "description", Encode.string input.description )
         , ( "steps", Encode.list testStepEncoder input.steps )
-        ]
-
-
-testRunInputEncoder : TestRunInput -> Encode.Value
-testRunInputEncoder input =
-    Encode.object
-        [ ( "notes", Encode.string input.notes )
         ]
 
 

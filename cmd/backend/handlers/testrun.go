@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuan-noorazman/ui-automation/project"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 	"github.com/hairizuan-noorazman/ui-automation/testrun"
@@ -27,24 +30,71 @@ type TestRunHandler struct {
 	testRunStore       testrun.Store
 	assetStore         testrun.AssetStore
 	testProcedureStore testprocedure.Store
+	projectStore       project.Store
+	stepNoteStore      testrun.StepNoteStore
 	storage            storage.BlobStorage
 	logger             logger.Logger
 }
 
 // NewTestRunHandler creates a new test run handler.
-func NewTestRunHandler(testRunStore testrun.Store, assetStore testrun.AssetStore, testProcedureStore testprocedure.Store, storage storage.BlobStorage, log logger.Logger) *TestRunHandler {
+func NewTestRunHandler(testRunStore testrun.Store, assetStore testrun.AssetStore, testProcedureStore testprocedure.Store, projectStore project.Store, stepNoteStore testrun.StepNoteStore, storage storage.BlobStorage, log logger.Logger) *TestRunHandler {
 	return &TestRunHandler{
 		testRunStore:       testRunStore,
 		assetStore:         assetStore,
 		testProcedureStore: testProcedureStore,
+		projectStore:       projectStore,
+		stepNoteStore:      stepNoteStore,
 		storage:            storage,
 		logger:             log,
 	}
 }
 
-// CreateTestRunRequest represents a test run creation request.
-type CreateTestRunRequest struct {
-	Notes string `json:"notes"`
+// checkTestRunOwnership verifies that the authenticated user owns the project
+// associated with the given test run. Returns false if the check fails (response
+// already written).
+func (h *TestRunHandler) checkTestRunOwnership(w http.ResponseWriter, r *http.Request, runID uuid.UUID) bool {
+	userID, ok := GetUserID(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "user not authenticated")
+		return false
+	}
+
+	tr, err := h.testRunStore.GetByID(r.Context(), runID)
+	if err != nil {
+		if errors.Is(err, testrun.ErrTestRunNotFound) {
+			respondError(w, http.StatusNotFound, "test run not found")
+			return false
+		}
+		respondError(w, http.StatusInternalServerError, "failed to verify test run")
+		return false
+	}
+
+	tp, err := h.testProcedureStore.GetByID(r.Context(), tr.TestProcedureID)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return false
+		}
+		respondError(w, http.StatusInternalServerError, "failed to verify test procedure")
+		return false
+	}
+
+	proj, err := h.projectStore.GetByID(r.Context(), tp.ProjectID)
+	if err != nil {
+		if errors.Is(err, project.ErrProjectNotFound) {
+			respondError(w, http.StatusNotFound, "project not found")
+			return false
+		}
+		respondError(w, http.StatusInternalServerError, "failed to verify project")
+		return false
+	}
+
+	if proj.OwnerID != userID {
+		respondError(w, http.StatusForbidden, "access denied")
+		return false
+	}
+
+	return true
 }
 
 // UpdateTestRunRequest represents a test run update request.
@@ -73,18 +123,10 @@ func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request body
-	var req CreateTestRunRequest
-	if err := parseJSON(r, &req, h.logger); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
 	// Create test run
 	tr := &testrun.TestRun{
 		TestProcedureID: procedureID,
 		ExecutedBy:      userID,
-		Notes:           req.Notes,
 		Status:          testrun.StatusPending,
 	}
 
@@ -364,6 +406,15 @@ func (h *TestRunHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 	// Get optional description
 	description := r.FormValue("description")
 
+	// Get optional step_index
+	var stepIndex *int
+	stepIndexStr := r.FormValue("step_index")
+	if stepIndexStr != "" {
+		if si, err := strconv.Atoi(stepIndexStr); err == nil {
+			stepIndex = &si
+		}
+	}
+
 	// Get file from form
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -404,6 +455,7 @@ func (h *TestRunHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 		FileSize:    fileSize,
 		MimeType:    header.Header.Get("Content-Type"),
 		Description: description,
+		StepIndex:   stepIndex,
 	}
 
 	if err := h.assetStore.Create(r.Context(), asset); err != nil {
@@ -662,6 +714,120 @@ func (h *TestRunHandler) GenerateGuide(w http.ResponseWriter, r *http.Request) {
 		reader.Close()
 	}
 
+}
+
+// SetStepNoteRequest represents the body for setting a step note.
+type SetStepNoteRequest struct {
+	Notes string `json:"notes"`
+}
+
+// GetRunProcedure handles getting the test procedure associated with a test run.
+func (h *TestRunHandler) GetRunProcedure(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
+		return
+	}
+
+	if !h.checkTestRunOwnership(w, r, id) {
+		return
+	}
+
+	tr, err := h.testRunStore.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, testrun.ErrTestRunNotFound) {
+			respondError(w, http.StatusNotFound, "test run not found")
+			return
+		}
+		h.logger.Error(r.Context(), "failed to get test run", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test run")
+		return
+	}
+
+	proc, err := h.testProcedureStore.GetByID(r.Context(), tr.TestProcedureID)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return
+		}
+		h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": tr.TestProcedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, proc)
+}
+
+// GetStepNotes handles listing all step notes for a test run.
+func (h *TestRunHandler) GetStepNotes(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
+		return
+	}
+
+	if !h.checkTestRunOwnership(w, r, id) {
+		return
+	}
+
+	notes, err := h.stepNoteStore.ListByTestRun(r.Context(), id)
+	if err != nil {
+		h.logger.Error(r.Context(), "failed to list step notes", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to list step notes")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, notes)
+}
+
+// SetStepNote handles creating or updating a note for a specific step in a test run.
+func (h *TestRunHandler) SetStepNote(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUIDOrRespond(w, r, "run_id", "test run")
+	if !ok {
+		return
+	}
+
+	stepIndexStr := mux.Vars(r)["step_index"]
+	stepIndex, err := strconv.Atoi(stepIndexStr)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid step index")
+		return
+	}
+
+	var req SetStepNoteRequest
+	if err := parseJSON(r, &req, h.logger); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if !h.checkTestRunOwnership(w, r, id) {
+		return
+	}
+
+	note := &testrun.StepNote{
+		TestRunID: id,
+		StepIndex: stepIndex,
+		Notes:     req.Notes,
+	}
+
+	if err := h.stepNoteStore.Upsert(r.Context(), note); err != nil {
+		h.logger.Error(r.Context(), "failed to upsert step note", map[string]interface{}{
+			"error":       err.Error(),
+			"test_run_id": id,
+			"step_index":  stepIndex,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to save step note")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, note)
 }
 
 // sanitizeFilename removes potentially dangerous characters from filenames.
