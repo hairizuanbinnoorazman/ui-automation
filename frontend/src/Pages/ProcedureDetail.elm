@@ -4,8 +4,8 @@ import API
 import Components
 import Dict exposing (Dict)
 import File exposing (File)
-import Html exposing (Html, button, div, h3, h4, input, p, span, text, textarea)
-import Html.Attributes exposing (class, disabled, placeholder, style, type_, value)
+import Html exposing (Html, a, button, div, h3, h4, input, p, span, text, textarea)
+import Html.Attributes exposing (class, disabled, download, href, placeholder, style, type_, value)
 import Html.Events exposing (on, onClick, onInput)
 import Http
 import Json.Decode as Decode
@@ -39,6 +39,7 @@ type alias Model =
     , committedLoading : Bool
     , loading : Bool
     , error : Maybe String
+    , showExportDropdown : Bool
     }
 
 
@@ -55,6 +56,7 @@ init projectId procedureId =
       , committedLoading = True
       , loading = False
       , error = Nothing
+      , showExportDropdown = False
       }
     , Cmd.batch
         [ API.getTestProcedure projectId procedureId True DraftResponse
@@ -71,6 +73,7 @@ type Msg
     = SwitchToViewMode
     | SwitchToEditMode
     | SwitchToNewVersionMode
+    | ToggleExportDropdown
     | LoadDraftAndCommitted
     | DraftResponse (Result Http.Error TestProcedure)
     | CommittedResponse (Result Http.Error TestProcedure)
@@ -114,6 +117,9 @@ update msg model =
             ( { model | viewMode = NewVersionMode, loading = True, error = Nothing }
             , API.getDraftDiff model.procedureId DiffResponse
             )
+
+        ToggleExportDropdown ->
+            ( { model | showExportDropdown = not model.showExportDropdown }, Cmd.none )
 
         LoadDraftAndCommitted ->
             ( { model | draftLoading = True, committedLoading = True }
@@ -452,6 +458,40 @@ viewModeSelector model =
             , disabled (procedureContentEqual model.draftProcedure model.committedProcedure)
             ]
             [ text "New Version" ]
+        , div
+            [ style "position" "relative" ]
+            [ button
+                [ onClick ToggleExportDropdown
+                , class "mdc-button"
+                ]
+                [ text "Export ▾" ]
+            , if model.showExportDropdown then
+                div
+                    [ style "position" "absolute"
+                    , style "top" "100%"
+                    , style "left" "0"
+                    , style "background-color" "white"
+                    , style "border" "1px solid #e0e0e0"
+                    , style "border-radius" "4px"
+                    , style "box-shadow" "0 2px 8px rgba(0,0,0,0.15)"
+                    , style "z-index" "100"
+                    , style "min-width" "160px"
+                    ]
+                    [ a
+                        [ href ("/api/v1/procedures/" ++ model.procedureId ++ "/export/markdown")
+                        , download ""
+                        , onClick ToggleExportDropdown
+                        , style "display" "block"
+                        , style "padding" "8px 16px"
+                        , style "color" "#333"
+                        , style "text-decoration" "none"
+                        ]
+                        [ text "Markdown (.zip)" ]
+                    ]
+
+              else
+                text ""
+            ]
         ]
 
 
