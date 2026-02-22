@@ -8,8 +8,9 @@ import Html.Attributes
 import Html.Events
 import Http
 import Pages.Login as Login
-import Pages.Register as Register
+import Pages.ProcedureDetail as ProcedureDetail
 import Pages.Projects as Projects
+import Pages.Register as Register
 import Pages.TestProcedures as TestProcedures
 import Pages.TestRuns as TestRuns
 import Types exposing (User)
@@ -48,6 +49,7 @@ type alias Model =
     , registerModel : Register.Model
     , projectsModel : Maybe Projects.Model
     , testProceduresModel : Maybe TestProcedures.Model
+    , procedureDetailModel : Maybe ProcedureDetail.Model
     , testRunsModel : Maybe TestRuns.Model
     }
 
@@ -57,6 +59,7 @@ type Route
     | Register
     | Projects
     | TestProcedures String
+    | ProcedureDetail String String
     | TestRuns String
     | NotFound
 
@@ -82,6 +85,7 @@ init _ url key =
       , registerModel = Register.init
       , projectsModel = Nothing
       , testProceduresModel = Nothing
+      , procedureDetailModel = Nothing
       , testRunsModel = Nothing
       }
     , API.getMe SessionCheckResponse
@@ -102,6 +106,7 @@ type Msg
     | RegisterMsg Register.Msg
     | ProjectsMsg Projects.Msg
     | TestProceduresMsg TestProcedures.Msg
+    | ProcedureDetailMsg ProcedureDetail.Msg
     | TestRunsMsg TestRuns.Msg
     | Logout
     | LogoutResponse (Result Http.Error ())
@@ -151,6 +156,15 @@ update msg model =
                             in
                             ( { model | testProceduresModel = Just pm }
                             , Cmd.map TestProceduresMsg pc
+                            )
+
+                        ProcedureDetail projectId procedureId ->
+                            let
+                                ( pm, pc ) =
+                                    ProcedureDetail.init projectId procedureId
+                            in
+                            ( { model | procedureDetailModel = Just pm }
+                            , Cmd.map ProcedureDetailMsg pc
                             )
 
                         TestRuns procedureId ->
@@ -228,6 +242,18 @@ update msg model =
                                 , testProceduresModel = Just pm
                               }
                             , Cmd.map TestProceduresMsg pc
+                            )
+
+                        ProcedureDetail projectId procedureId ->
+                            let
+                                ( pm, pc ) =
+                                    ProcedureDetail.init projectId procedureId
+                            in
+                            ( { model
+                                | user = Just user
+                                , procedureDetailModel = Just pm
+                              }
+                            , Cmd.map ProcedureDetailMsg pc
                             )
 
                         TestRuns procedureId ->
@@ -330,8 +356,33 @@ update msg model =
                         ( newModel, cmd ) =
                             TestProcedures.update subMsg testProceduresModel
                     in
-                    ( { model | testProceduresModel = Just newModel }
-                    , Cmd.map TestProceduresMsg cmd
+                    case newModel.navigationTarget of
+                        Just procedureId ->
+                            ( { model | testProceduresModel = Just { newModel | navigationTarget = Nothing } }
+                            , Cmd.batch
+                                [ Cmd.map TestProceduresMsg cmd
+                                , Nav.pushUrl model.key
+                                    ("/projects/" ++ newModel.projectId ++ "/procedures/" ++ procedureId)
+                                ]
+                            )
+
+                        Nothing ->
+                            ( { model | testProceduresModel = Just newModel }
+                            , Cmd.map TestProceduresMsg cmd
+                            )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        ProcedureDetailMsg subMsg ->
+            case model.procedureDetailModel of
+                Just procedureDetailModel ->
+                    let
+                        ( newModel, cmd ) =
+                            ProcedureDetail.update subMsg procedureDetailModel
+                    in
+                    ( { model | procedureDetailModel = Just newModel }
+                    , Cmd.map ProcedureDetailMsg cmd
                     )
 
                 Nothing ->
@@ -625,6 +676,19 @@ viewContent model =
                         Nothing ->
                             Html.map LoginMsg (Login.view model.loginModel)
 
+                ProcedureDetail _ _ ->
+                    case model.user of
+                        Just _ ->
+                            case model.procedureDetailModel of
+                                Just procedureDetailModel ->
+                                    Html.map ProcedureDetailMsg (ProcedureDetail.view procedureDetailModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
                 TestRuns _ ->
                     case model.user of
                         Just _ ->
@@ -666,5 +730,6 @@ routeParser =
         , Parser.map Register (Parser.s "register")
         , Parser.map Projects (Parser.s "projects")
         , Parser.map TestProcedures (Parser.s "projects" </> Parser.string </> Parser.s "procedures")
+        , Parser.map ProcedureDetail (Parser.s "projects" </> Parser.string </> Parser.s "procedures" </> Parser.string)
         , Parser.map TestRuns (Parser.s "procedures" </> Parser.string </> Parser.s "runs")
         ]
