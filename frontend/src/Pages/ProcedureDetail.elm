@@ -12,6 +12,12 @@ import Json.Decode as Decode
 import Types exposing (DraftDiff, TestProcedure, TestStep)
 
 
+type StepChange
+    = Added TestStep
+    | Removed TestStep
+    | Unchanged TestStep
+
+
 -- MODEL
 
 
@@ -281,6 +287,7 @@ update msg model =
                 Ok draft ->
                     ( { model
                         | draftProcedure = Just draft
+                        , editingSteps = draft.steps
                         , loading = False
                         , error = Nothing
                       }
@@ -374,6 +381,44 @@ procedureContentEqual maybeA maybeB =
             False
 
 
+computeStepDiff : List TestStep -> List TestStep -> List StepChange
+computeStepDiff committedSteps draftSteps =
+    let
+        maxLen =
+            max (List.length committedSteps) (List.length draftSteps)
+
+        getAt idx lst =
+            List.head (List.drop idx lst)
+
+        buildDiff idx acc =
+            if idx >= maxLen then
+                List.reverse acc
+
+            else
+                let
+                    changes =
+                        case ( getAt idx committedSteps, getAt idx draftSteps ) of
+                            ( Just c, Just d ) ->
+                                if c.name == d.name && c.instructions == d.instructions then
+                                    [ Unchanged d ]
+
+                                else
+                                    [ Removed c, Added d ]
+
+                            ( Just c, Nothing ) ->
+                                [ Removed c ]
+
+                            ( Nothing, Just d ) ->
+                                [ Added d ]
+
+                            ( Nothing, Nothing ) ->
+                                []
+                in
+                buildDiff (idx + 1) (List.reverse changes ++ acc)
+    in
+    buildDiff 0 []
+
+
 viewModeSelector : Model -> Html Msg
 viewModeSelector model =
     div
@@ -425,7 +470,52 @@ viewModeView model =
 
     else
         case ( model.committedProcedure, model.draftProcedure ) of
-            ( Just committed, _ ) ->
+            ( Just committed, Just draft ) ->
+                let
+                    hasDiff =
+                        not (procedureContentEqual (Just committed) (Just draft))
+                in
+                div []
+                    [ div
+                        [ style "display" "flex"
+                        , style "align-items" "center"
+                        , style "gap" "8px"
+                        , style "margin-bottom" "4px"
+                        ]
+                        [ h3
+                            [ class "mdc-typography--headline5"
+                            , style "margin" "0"
+                            ]
+                            [ text committed.name ]
+                        , span
+                            [ style "background-color" "#1976d2"
+                            , style "color" "white"
+                            , style "font-size" "12px"
+                            , style "font-weight" "500"
+                            , style "padding" "2px 8px"
+                            , style "border-radius" "12px"
+                            ]
+                            [ text ("v" ++ String.fromInt committed.version) ]
+                        ]
+                    , p [ class "mdc-typography--body1" ] [ text committed.description ]
+                    , if hasDiff then
+                        div []
+                            [ div
+                                [ style "background-color" "#fff8e1"
+                                , style "border-left" "4px solid #ff9800"
+                                , style "padding" "12px 16px"
+                                , style "margin-bottom" "16px"
+                                , class "mdc-typography--body2"
+                                ]
+                                [ text "Showing draft with unpublished changes. Use 'New Version' to publish." ]
+                            , viewStepsWithDiff (computeStepDiff committed.steps draft.steps)
+                            ]
+
+                      else
+                        viewSteps committed.steps
+                    ]
+
+            ( Just committed, Nothing ) ->
                 div []
                     [ div
                         [ style "display" "flex"
@@ -464,7 +554,7 @@ viewModeView model =
                         [ text "Draft only - No published version yet" ]
                     , h3 [ class "mdc-typography--headline5" ] [ text draft.name ]
                     , p [ class "mdc-typography--body1" ] [ text draft.description ]
-                    , viewSteps draft.steps
+                    , viewStepsWithDiff (List.map Added draft.steps)
                     ]
 
             _ ->
@@ -494,6 +584,108 @@ viewSteps steps =
                 )
                 steps
             )
+
+
+viewStepsWithDiff : List StepChange -> Html Msg
+viewStepsWithDiff changes =
+    if List.isEmpty changes then
+        p [ class "mdc-typography--body1" ] [ text "No steps defined" ]
+
+    else
+        let
+            renderChange stepNum change =
+                case change of
+                    Unchanged step ->
+                        ( stepNum + 1
+                        , div
+                            [ style "border" "1px solid #e0e0e0"
+                            , style "border-radius" "4px"
+                            , style "padding" "16px"
+                            , style "margin-bottom" "12px"
+                            ]
+                            [ h4 [ class "mdc-typography--subtitle1", style "margin-top" "0" ]
+                                [ text (String.fromInt stepNum ++ ". " ++ step.name) ]
+                            , p [ class "mdc-typography--body2" ] [ text step.instructions ]
+                            , viewImageGallery step.imagePaths
+                            ]
+                        )
+
+                    Added step ->
+                        ( stepNum + 1
+                        , div
+                            [ style "border" "1px solid #4caf50"
+                            , style "background-color" "#f1f8e9"
+                            , style "border-radius" "4px"
+                            , style "padding" "16px"
+                            , style "margin-bottom" "12px"
+                            ]
+                            [ h4 [ class "mdc-typography--subtitle1", style "margin-top" "0" ]
+                                [ span
+                                    [ style "background-color" "#4caf50"
+                                    , style "color" "white"
+                                    , style "font-size" "11px"
+                                    , style "font-weight" "bold"
+                                    , style "padding" "1px 6px"
+                                    , style "border-radius" "10px"
+                                    , style "margin-right" "6px"
+                                    ]
+                                    [ text "+" ]
+                                , text (String.fromInt stepNum ++ ". " ++ step.name)
+                                ]
+                            , p [ class "mdc-typography--body2" ] [ text step.instructions ]
+                            , viewImageGallery step.imagePaths
+                            ]
+                        )
+
+                    Removed step ->
+                        ( stepNum
+                        , div
+                            [ style "border" "1px solid #ef9a9a"
+                            , style "border-radius" "4px"
+                            , style "padding" "16px"
+                            , style "margin-bottom" "12px"
+                            , style "opacity" "0.7"
+                            ]
+                            [ h4
+                                [ class "mdc-typography--subtitle1"
+                                , style "margin-top" "0"
+                                , style "text-decoration" "line-through"
+                                , style "color" "#9e9e9e"
+                                ]
+                                [ span
+                                    [ style "background-color" "#ef9a9a"
+                                    , style "color" "white"
+                                    , style "font-size" "11px"
+                                    , style "font-weight" "bold"
+                                    , style "padding" "1px 6px"
+                                    , style "border-radius" "10px"
+                                    , style "margin-right" "6px"
+                                    ]
+                                    [ text "-" ]
+                                , text step.name
+                                ]
+                            , p
+                                [ class "mdc-typography--body2"
+                                , style "text-decoration" "line-through"
+                                , style "color" "#9e9e9e"
+                                ]
+                                [ text step.instructions ]
+                            ]
+                        )
+
+            ( _, rendered ) =
+                List.foldl
+                    (\change ( num, acc ) ->
+                        let
+                            ( nextNum, el ) =
+                                renderChange num change
+                        in
+                        ( nextNum, acc ++ [ el ] )
+                    )
+                    ( 1, [] )
+                    changes
+        in
+        div [] rendered
 
 
 viewImageGallery : List String -> Html Msg
@@ -557,7 +749,6 @@ viewEditMode model =
                     ]
                     [ button [ onClick SaveDraft, class "mdc-button mdc-button--raised" ] [ text "Save Draft" ]
                     , button [ onClick ClearChanges, class "mdc-button" ] [ text "Clear Changes" ]
-                    , button [ onClick SwitchToViewMode, class "mdc-button" ] [ text "Done Editing" ]
                     ]
                 ]
 
