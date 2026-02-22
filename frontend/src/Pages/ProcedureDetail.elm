@@ -390,33 +390,25 @@ computeStepDiff committedSteps draftSteps =
         getAt idx lst =
             List.head (List.drop idx lst)
 
-        buildDiff idx acc =
-            if idx >= maxLen then
-                List.reverse acc
+        changesAt idx =
+            case ( getAt idx committedSteps, getAt idx draftSteps ) of
+                ( Just c, Just d ) ->
+                    if c.name == d.name && c.instructions == d.instructions then
+                        [ Unchanged d ]
 
-            else
-                let
-                    changes =
-                        case ( getAt idx committedSteps, getAt idx draftSteps ) of
-                            ( Just c, Just d ) ->
-                                if c.name == d.name && c.instructions == d.instructions then
-                                    [ Unchanged d ]
+                    else
+                        [ Removed c, Added d ]
 
-                                else
-                                    [ Removed c, Added d ]
+                ( Just c, Nothing ) ->
+                    [ Removed c ]
 
-                            ( Just c, Nothing ) ->
-                                [ Removed c ]
+                ( Nothing, Just d ) ->
+                    [ Added d ]
 
-                            ( Nothing, Just d ) ->
-                                [ Added d ]
-
-                            ( Nothing, Nothing ) ->
-                                []
-                in
-                buildDiff (idx + 1) (List.reverse changes ++ acc)
+                ( Nothing, Nothing ) ->
+                    []
     in
-    buildDiff 0 []
+    List.concatMap changesAt (List.range 0 (maxLen - 1))
 
 
 viewModeSelector : Model -> Html Msg
