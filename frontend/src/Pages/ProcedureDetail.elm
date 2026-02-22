@@ -466,27 +466,39 @@ viewModeSelector model =
                 ]
                 [ text "Export ▾" ]
             , if model.showExportDropdown then
-                div
-                    [ style "position" "absolute"
-                    , style "top" "100%"
-                    , style "left" "0"
-                    , style "background-color" "white"
-                    , style "border" "1px solid #e0e0e0"
-                    , style "border-radius" "4px"
-                    , style "box-shadow" "0 2px 8px rgba(0,0,0,0.15)"
-                    , style "z-index" "100"
-                    , style "min-width" "160px"
-                    ]
-                    [ a
-                        [ href ("/api/v1/procedures/" ++ model.procedureId ++ "/export/markdown")
-                        , download ""
+                div []
+                    [ div
+                        [ style "position" "fixed"
+                        , style "top" "0"
+                        , style "left" "0"
+                        , style "right" "0"
+                        , style "bottom" "0"
+                        , style "z-index" "99"
                         , onClick ToggleExportDropdown
-                        , style "display" "block"
-                        , style "padding" "8px 16px"
-                        , style "color" "#333"
-                        , style "text-decoration" "none"
                         ]
-                        [ text "Markdown (.zip)" ]
+                        []
+                    , div
+                        [ style "position" "absolute"
+                        , style "top" "100%"
+                        , style "left" "0"
+                        , style "background-color" "white"
+                        , style "border" "1px solid #e0e0e0"
+                        , style "border-radius" "4px"
+                        , style "box-shadow" "0 2px 8px rgba(0,0,0,0.15)"
+                        , style "z-index" "100"
+                        , style "min-width" "160px"
+                        ]
+                        [ a
+                            [ href ("/api/v1/procedures/" ++ model.procedureId ++ "/export/markdown")
+                            , download ""
+                            , onClick ToggleExportDropdown
+                            , style "display" "block"
+                            , style "padding" "8px 16px"
+                            , style "color" "#333"
+                            , style "text-decoration" "none"
+                            ]
+                            [ text "Markdown (.zip)" ]
+                        ]
                     ]
 
               else

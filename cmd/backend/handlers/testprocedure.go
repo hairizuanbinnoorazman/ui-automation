@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -613,7 +614,7 @@ func (h *TestProcedureHandler) ExportMarkdown(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Build procedure.md content
+	// Build procedure.md content with step-indexed image references to avoid name collisions
 	var md strings.Builder
 	fmt.Fprintf(&md, "# %s\n\n", tp.Name)
 	if tp.Description != "" {
@@ -624,34 +625,31 @@ func (h *TestProcedureHandler) ExportMarkdown(w http.ResponseWriter, r *http.Req
 		if step.Instructions != "" {
 			fmt.Fprintf(&md, "%s\n\n", step.Instructions)
 		}
-		for _, imagePath := range step.ImagePaths {
+		for j, imagePath := range step.ImagePaths {
 			basename := filepath.Base(imagePath)
-			fmt.Fprintf(&md, "![%s](./images/%s)\n\n", step.Name, basename)
+			imgName := fmt.Sprintf("step%d_%d_%s", i+1, j+1, basename)
+			fmt.Fprintf(&md, "![%s](./images/%s)\n\n", step.Name, imgName)
 		}
 	}
 
-	// Stream ZIP archive to response
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "procedure-"+id.String()+".zip"))
-	zw := zip.NewWriter(w)
-	defer func() {
-		if err := zw.Close(); err != nil {
-			h.logger.Error(ctx, "failed to close zip writer", map[string]interface{}{"error": err.Error()})
-		}
-	}()
+	// Build ZIP into a buffer so errors can still return proper HTTP responses
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
 
 	mdWriter, err := zw.Create("procedure.md")
 	if err != nil {
 		h.logger.Error(ctx, "failed to create procedure.md in zip", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to create zip")
 		return
 	}
 	if _, err := io.WriteString(mdWriter, md.String()); err != nil {
 		h.logger.Error(ctx, "failed to write procedure.md", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to create zip")
 		return
 	}
 
-	for _, step := range tp.Steps {
-		for _, imagePath := range step.ImagePaths {
+	for i, step := range tp.Steps {
+		for j, imagePath := range step.ImagePaths {
 			reader, err := h.storage.Download(ctx, imagePath)
 			if err != nil {
 				h.logger.Warn(ctx, "failed to download step image for export", map[string]interface{}{
@@ -661,20 +659,33 @@ func (h *TestProcedureHandler) ExportMarkdown(w http.ResponseWriter, r *http.Req
 				continue
 			}
 			basename := filepath.Base(imagePath)
-			imgWriter, err := zw.Create("images/" + basename)
+			imgName := fmt.Sprintf("step%d_%d_%s", i+1, j+1, basename)
+			imgWriter, err := zw.Create("images/" + imgName)
 			if err != nil {
 				reader.Close()
 				h.logger.Error(ctx, "failed to create image entry in zip", map[string]interface{}{"error": err.Error()})
+				respondError(w, http.StatusInternalServerError, "failed to create zip")
 				return
 			}
 			if _, err := io.Copy(imgWriter, reader); err != nil {
 				reader.Close()
 				h.logger.Error(ctx, "failed to write image to zip", map[string]interface{}{"error": err.Error()})
+				respondError(w, http.StatusInternalServerError, "failed to create zip")
 				return
 			}
 			reader.Close()
 		}
 	}
+
+	if err := zw.Close(); err != nil {
+		h.logger.Error(ctx, "failed to finalize zip", map[string]interface{}{"error": err.Error()})
+		respondError(w, http.StatusInternalServerError, "failed to create zip")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "procedure-"+id.String()+".zip"))
+	w.Write(buf.Bytes())
 }
 
 // CommitDraft handles committing the draft as a new version.
