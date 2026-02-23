@@ -123,9 +123,24 @@ func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create test run
+	// Resolve to the latest committed version so the run captures the correct snapshot.
+	latestProc, err := h.testProcedureStore.GetLatestCommitted(r.Context(), procedureID)
+	if err != nil {
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
+			return
+		}
+		h.logger.Error(r.Context(), "failed to resolve latest procedure version", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": procedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+		return
+	}
+
+	// Create test run against the resolved latest committed version.
 	tr := &testrun.TestRun{
-		TestProcedureID: procedureID,
+		TestProcedureID: latestProc.ID,
 		ExecutedBy:      userID,
 		Status:          testrun.StatusPending,
 	}
@@ -133,7 +148,7 @@ func (h *TestRunHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := h.testRunStore.Create(r.Context(), tr); err != nil {
 		h.logger.Error(r.Context(), "failed to create test run", map[string]interface{}{
 			"error":             err.Error(),
-			"test_procedure_id": procedureID,
+			"test_procedure_id": latestProc.ID,
 		})
 		respondError(w, http.StatusInternalServerError, "failed to create test run")
 		return
@@ -758,22 +773,18 @@ func (h *TestRunHandler) GetRunProcedure(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	proc, err := h.testProcedureStore.GetLatestCommitted(r.Context(), tr.TestProcedureID)
+	proc, err := h.testProcedureStore.GetByID(r.Context(), tr.TestProcedureID)
 	if err != nil {
-		// Fall back to the exact version the run was created against if no committed version found.
-		proc, err = h.testProcedureStore.GetByID(r.Context(), tr.TestProcedureID)
-		if err != nil {
-			if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
-				respondError(w, http.StatusNotFound, "test procedure not found")
-				return
-			}
-			h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
-				"error":             err.Error(),
-				"test_procedure_id": tr.TestProcedureID,
-			})
-			respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+			respondError(w, http.StatusNotFound, "test procedure not found")
 			return
 		}
+		h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
+			"error":             err.Error(),
+			"test_procedure_id": tr.TestProcedureID,
+		})
+		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
+		return
 	}
 
 	respondJSON(w, http.StatusOK, proc)
