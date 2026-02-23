@@ -108,6 +108,7 @@ type alias TestRun =
     , testProcedureId : String
     , status : TestRunStatus
     , notes : String
+    , procedureVersion : Int
     , startedAt : Maybe Time.Posix
     , completedAt : Maybe Time.Posix
     , createdAt : Time.Posix
@@ -260,7 +261,11 @@ testRunStatusDecoder =
 
 testRunDecoder : Decoder TestRun
 testRunDecoder =
-    Decode.map8 TestRun
+    Decode.map8
+        (\id testProcedureId status notes startedAt completedAt createdAt updatedAt ->
+            \procedureVersion ->
+                TestRun id testProcedureId status notes procedureVersion startedAt completedAt createdAt updatedAt
+        )
         (Decode.field "id" Decode.string)
         (Decode.field "test_procedure_id" Decode.string)
         (Decode.field "status" testRunStatusDecoder)
@@ -269,6 +274,11 @@ testRunDecoder =
         (Decode.maybe (Decode.field "completed_at" timeDecoder))
         (Decode.field "created_at" timeDecoder)
         (Decode.field "updated_at" timeDecoder)
+        |> Decode.andThen
+            (\fn ->
+                Decode.map fn
+                    (Decode.oneOf [ Decode.field "procedure_version" Decode.int, Decode.succeed 0 ])
+            )
 
 
 assetTypeDecoder : Decoder AssetType

@@ -97,6 +97,12 @@ func (h *TestRunHandler) checkTestRunOwnership(w http.ResponseWriter, r *http.Re
 	return true
 }
 
+// testRunWithVersion wraps a TestRun with the resolved procedure version number.
+type testRunWithVersion struct {
+	testrun.TestRun
+	ProcedureVersion uint `json:"procedure_version"`
+}
+
 // UpdateTestRunRequest represents a test run update request.
 type UpdateTestRunRequest struct {
 	Notes *string `json:"notes,omitempty"`
@@ -168,12 +174,14 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Resolve full version chain so runs created against any version are included.
 	procedures, err := h.testProcedureStore.GetVersionHistory(r.Context(), procedureID)
 	var procedureIDs []uuid.UUID
+	versionMap := make(map[uuid.UUID]uint)
 	if err != nil {
 		// Fall back to the single ID if the chain cannot be resolved.
 		procedureIDs = []uuid.UUID{procedureID}
 	} else {
 		for _, p := range procedures {
 			procedureIDs = append(procedureIDs, p.ID)
+			versionMap[p.ID] = p.Version
 		}
 	}
 
@@ -217,7 +225,14 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, NewPaginatedResponse(runs, total, limit, offset))
+	runsWithVersion := make([]testRunWithVersion, len(runs))
+	for i, run := range runs {
+		runsWithVersion[i] = testRunWithVersion{
+			TestRun:          *run,
+			ProcedureVersion: versionMap[run.TestProcedureID],
+		}
+	}
+	respondJSON(w, http.StatusOK, NewPaginatedResponse(runsWithVersion, total, limit, offset))
 }
 
 // GetByID handles getting a single test run by ID.

@@ -141,6 +141,7 @@ viewRunsTable runs =
             [ Html.tr []
                 [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Status" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Created" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Procedure Version" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Actions" ]
                 ]
             ]
@@ -152,8 +153,9 @@ viewRunsTable runs =
 viewRunRow : TestRun -> Html Msg
 viewRunRow run =
     Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
-        [ Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (statusToString run.status) ]
+        [ Html.td [ Html.Attributes.style "padding" "12px" ] [ viewStatus run.status ]
         , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (formatTime run.createdAt) ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (String.fromInt run.procedureVersion) ]
         , Html.td [ Html.Attributes.style "padding" "12px" ]
             [ Html.a
                 [ Html.Attributes.href ("/runs/" ++ run.id)
@@ -304,3 +306,28 @@ statusToString status =
 
         Types.Skipped ->
             "Skipped"
+
+
+viewStatus : TestRunStatus -> Html Msg
+viewStatus status =
+    case status of
+        Types.Passed ->
+            Html.span []
+                [ Html.span [ Html.Attributes.style "color" "green", Html.Attributes.style "margin-right" "4px" ] [ Html.text "✓" ]
+                , Html.text "Passed"
+                ]
+
+        Types.Failed ->
+            Html.span []
+                [ Html.span [ Html.Attributes.style "color" "red", Html.Attributes.style "margin-right" "4px" ] [ Html.text "✗" ]
+                , Html.text "Failed"
+                ]
+
+        Types.Skipped ->
+            Html.span []
+                [ Html.span [ Html.Attributes.style "color" "gray", Html.Attributes.style "margin-right" "4px" ] [ Html.text "✗" ]
+                , Html.text "Skipped"
+                ]
+
+        _ ->
+            Html.text (statusToString status)
