@@ -551,12 +551,16 @@ viewStep model stepIndex step =
 
 viewStepImage : String -> Html Msg
 viewStepImage imagePath =
+    let
+        fullPath =
+            "/uploads/" ++ imagePath
+    in
     Html.a
-        [ Html.Attributes.href imagePath
+        [ Html.Attributes.href fullPath
         , Html.Attributes.target "_blank"
         ]
         [ Html.img
-            [ Html.Attributes.src imagePath
+            [ Html.Attributes.src fullPath
             , Html.Attributes.style "max-width" "120px"
             , Html.Attributes.style "max-height" "120px"
             , Html.Attributes.style "object-fit" "cover"

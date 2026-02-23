@@ -822,12 +822,24 @@ viewEditableStep model index step =
             , onInput (UpdateStepInstructions index)
             ]
         , div [ style "margin-bottom" "12px" ]
-            [ input
-                [ type_ "file"
-                , Html.Attributes.accept "image/*"
-                , on "change" (Decode.map (ImageSelected index) fileDecoder)
+            [ Html.label
+                [ style "display" "inline-block"
+                , style "cursor" "pointer"
+                , style "padding" "6px 12px"
+                , style "border" "1px solid #6200ee"
+                , style "border-radius" "4px"
+                , style "color" "#6200ee"
+                , style "font-size" "14px"
                 ]
-                []
+                [ text "Upload Image"
+                , input
+                    [ type_ "file"
+                    , Html.Attributes.accept "image/*"
+                    , style "display" "none"
+                    , on "change" (Decode.map (ImageSelected index) fileDecoder)
+                    ]
+                    []
+                ]
             , if Dict.member index model.uploadingImages then
                 span [ class "mdc-typography--caption", style "margin-left" "8px" ] [ text "Uploading..." ]
 

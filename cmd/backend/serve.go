@@ -123,6 +123,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Setup router
 	router := mux.NewRouter()
 
+	// Serve uploaded static files (local storage only)
+	if cfg.Storage.Type == "local" {
+		router.PathPrefix("/uploads/").Handler(
+			http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.Storage.BaseDir))),
+		)
+	}
+
 	// Health check endpoint (public)
 	router.HandleFunc("/health", handlers.HealthHandler).Methods("GET")
 
