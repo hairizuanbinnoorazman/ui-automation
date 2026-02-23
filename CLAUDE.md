@@ -296,3 +296,5 @@ When writing backend tests:
 5. **Asset file paths**: Storage package sanitizes filenames to prevent path traversal. Don't bypass this security check.
 
 6. **Soft deletes**: Queries must filter `deleted_at IS NULL` except when specifically requesting deleted records.
+
+7. **Database migrations — one statement per file**: The project uses `golang-migrate` with `WithInstance`, which does NOT enable `multiStatements` support (that flag is only set internally when using the URL-based `Open` path). Each `.sql` migration file must contain exactly one SQL statement. Multi-statement files will fail after the first statement and leave the database in a dirty state. The `mysql.Config` struct does not have a `MultiStatementEnabled` field — do not attempt to add one.
