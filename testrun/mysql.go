@@ -147,6 +147,9 @@ func (s *MySQLStore) CountByTestProcedure(ctx context.Context, testProcedureID u
 
 // ListByTestProcedures retrieves a paginated list of test runs for multiple procedure versions.
 func (s *MySQLStore) ListByTestProcedures(ctx context.Context, ids []uuid.UUID, limit, offset int) ([]*TestRun, error) {
+	if len(ids) == 0 {
+		return []*TestRun{}, nil
+	}
 	var testRuns []*TestRun
 	err := s.db.WithContext(ctx).
 		Where("test_procedure_id IN ?", ids).
@@ -169,6 +172,9 @@ func (s *MySQLStore) ListByTestProcedures(ctx context.Context, ids []uuid.UUID, 
 
 // CountByTestProcedures returns the total count of test runs for multiple procedure versions.
 func (s *MySQLStore) CountByTestProcedures(ctx context.Context, ids []uuid.UUID) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
 	var count int64
 	err := s.db.WithContext(ctx).
 		Model(&TestRun{}).
