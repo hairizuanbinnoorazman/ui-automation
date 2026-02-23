@@ -14,6 +14,7 @@ import (
 	"github.com/hairizuan-noorazman/ui-automation/database"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/project"
+	"github.com/hairizuan-noorazman/ui-automation/scriptgen"
 	"github.com/hairizuan-noorazman/ui-automation/session"
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
@@ -109,6 +110,44 @@ func runServer(cmd *cobra.Command, args []string) error {
 	testProcedureStore := testprocedure.NewMySQLStore(db, log)
 	testRunStore := testrun.NewMySQLStore(db, log)
 	assetStore := testrun.NewMySQLAssetStore(db, log)
+	scriptStore := scriptgen.NewMySQLStore(db, log)
+
+	// Initialize script generator based on config provider
+	var scriptGenerator scriptgen.ScriptGenerator
+	switch cfg.ScriptGen.Provider {
+	case "bedrock":
+		bedrockGen, err := scriptgen.NewBedrockGenerator(
+			cfg.ScriptGen.Region,
+			cfg.ScriptGen.ModelID,
+			cfg.ScriptGen.MaxTokens,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize Bedrock generator: %w", err)
+		}
+
+		// Configure validation settings
+		validationCfg := &scriptgen.ValidationConfig{
+			MaxNameLength:        cfg.ScriptGen.Validation.MaxNameLength,
+			MaxDescriptionLength: cfg.ScriptGen.Validation.MaxDescriptionLength,
+			MaxStepsJSONLength:   cfg.ScriptGen.Validation.MaxStepsJSONLength,
+			MaxStepsCount:        cfg.ScriptGen.Validation.MaxStepsCount,
+		}
+		bedrockGen.SetValidationConfig(validationCfg)
+
+		scriptGenerator = bedrockGen
+
+		log.Info(ctx, "script generator initialized", map[string]interface{}{
+			"provider":                "bedrock",
+			"region":                  cfg.ScriptGen.Region,
+			"model":                   cfg.ScriptGen.ModelID,
+			"max_tokens":              cfg.ScriptGen.MaxTokens,
+			"max_name_length":         cfg.ScriptGen.Validation.MaxNameLength,
+			"max_description_length":  cfg.ScriptGen.Validation.MaxDescriptionLength,
+			"max_steps_count":         cfg.ScriptGen.Validation.MaxStepsCount,
+		})
+	default:
+		return fmt.Errorf("unsupported script generator provider: %s", cfg.ScriptGen.Provider)
+	}
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -216,6 +255,25 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/runs/{run_id}/assets", testRunHandler.ListAssets).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DownloadAsset).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/assets/{asset_id}", testRunHandler.DeleteAsset).Methods("DELETE")
+
+	// Script Generation routes (protected)
+	scriptGenHandler := handlers.NewScriptGenHandler(
+		scriptStore,
+		testProcedureStore,
+		projectStore,
+		scriptGenerator,
+		blobStorage,
+		log,
+	)
+
+	// Generate and list scripts for a procedure
+	apiRouter.HandleFunc("/procedures/{procedure_id}/scripts", scriptGenHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/procedures/{procedure_id}/scripts", scriptGenHandler.Generate).Methods("POST")
+
+	// Individual script operations
+	apiRouter.HandleFunc("/scripts/{script_id}", scriptGenHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/scripts/{script_id}/download", scriptGenHandler.Download).Methods("GET")
+	apiRouter.HandleFunc("/scripts/{script_id}", scriptGenHandler.Delete).Methods("DELETE")
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
