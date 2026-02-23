@@ -55,6 +55,7 @@ type TestRunAsset struct {
 	FileSize    int64     `json:"file_size" gorm:"not null"`
 	MimeType    string    `json:"mime_type,omitempty" gorm:"type:varchar(128)"`
 	Description string    `json:"description,omitempty" gorm:"type:text"`
+	StepIndex   *int      `json:"step_index,omitempty" gorm:"column:step_index"`
 	UploadedAt  time.Time `json:"uploaded_at"`
 }
 

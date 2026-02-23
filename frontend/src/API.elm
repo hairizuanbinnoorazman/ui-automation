@@ -3,6 +3,7 @@ module API exposing (..)
 import File exposing (File)
 import Http
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Types exposing (..)
 
 
@@ -240,11 +241,11 @@ getTestRun runId toMsg =
         }
 
 
-createTestRun : String -> TestRunInput -> (Result Http.Error TestRun -> msg) -> Cmd msg
-createTestRun procedureId input toMsg =
+createTestRun : String -> (Result Http.Error TestRun -> msg) -> Cmd msg
+createTestRun procedureId toMsg =
     Http.post
         { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/runs"
-        , body = Http.jsonBody (testRunInputEncoder input)
+        , body = Http.emptyBody
         , expect = Http.expectJson toMsg testRunDecoder
         }
 
@@ -255,7 +256,7 @@ updateTestRun runId notes toMsg =
         { method = "PUT"
         , headers = []
         , url = baseUrl ++ "/runs/" ++ runId
-        , body = Http.jsonBody (testRunInputEncoder { notes = notes })
+        , body = Http.jsonBody (Encode.object [ ( "notes", Encode.string notes ) ])
         , expect = Http.expectJson toMsg testRunDecoder
         , timeout = Nothing
         , tracker = Nothing
@@ -308,3 +309,46 @@ deleteTestRunAsset runId assetId toMsg =
 getAssetDownloadUrl : String -> String -> String
 getAssetDownloadUrl runId assetId =
     baseUrl ++ "/runs/" ++ runId ++ "/assets/" ++ assetId
+
+
+getRunProcedure : String -> (Result Http.Error TestProcedure -> msg) -> Cmd msg
+getRunProcedure runId toMsg =
+    Http.get
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/procedure"
+        , expect = Http.expectJson toMsg testProcedureDecoder
+        }
+
+
+getStepNotes : String -> (Result Http.Error (List TestRunStepNote) -> msg) -> Cmd msg
+getStepNotes runId toMsg =
+    Http.get
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/steps/notes"
+        , expect = Http.expectJson toMsg (Decode.list testRunStepNoteDecoder)
+        }
+
+
+setStepNote : String -> Int -> String -> (Result Http.Error TestRunStepNote -> msg) -> Cmd msg
+setStepNote runId stepIndex notes toMsg =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = baseUrl ++ "/runs/" ++ runId ++ "/steps/" ++ String.fromInt stepIndex ++ "/notes"
+        , body = Http.jsonBody (Encode.object [ ( "notes", Encode.string notes ) ])
+        , expect = Http.expectJson toMsg testRunStepNoteDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+uploadStepAsset : String -> Int -> File -> (Result Http.Error TestRunAsset -> msg) -> Cmd msg
+uploadStepAsset runId stepIndex file toMsg =
+    Http.post
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/assets"
+        , body =
+            Http.multipartBody
+                [ Http.filePart "file" file
+                , Http.stringPart "asset_type" "image"
+                , Http.stringPart "step_index" (String.fromInt stepIndex)
+                ]
+        , expect = Http.expectJson toMsg testRunAssetDecoder
+        }

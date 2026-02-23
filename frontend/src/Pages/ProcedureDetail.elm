@@ -458,6 +458,11 @@ viewModeSelector model =
             , disabled (procedureContentEqual model.draftProcedure model.committedProcedure)
             ]
             [ text "New Version" ]
+        , a
+            [ href ("/procedures/" ++ model.procedureId ++ "/runs")
+            , class "mdc-button"
+            ]
+            [ text "Test Runs" ]
         , div
             [ style "position" "relative" ]
             [ button
