@@ -225,6 +225,8 @@ viewProcedureList model =
                 [ Html.thead []
                     [ Html.tr []
                         [ Html.th [ style "text-align" "left", style "padding" "12px" ] [ text "Name" ]
+                        , Html.th [ style "text-align" "left", style "padding" "12px" ] [ text "Description" ]
+                        , Html.th [ style "text-align" "left", style "padding" "12px" ] [ text "Version" ]
                         ]
                     ]
                 , Html.tbody []
@@ -236,6 +238,8 @@ viewProcedureList model =
                                 , style "cursor" "pointer"
                                 ]
                                 [ Html.td [ style "padding" "12px" ] [ text proc.name ]
+                                , Html.td [ style "padding" "12px" ] [ text proc.description ]
+                                , Html.td [ style "padding" "12px" ] [ text (String.fromInt proc.version) ]
                                 ]
                         )
                         model.procedures
