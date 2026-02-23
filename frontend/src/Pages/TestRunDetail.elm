@@ -53,6 +53,7 @@ init runId =
         [ API.getTestRun runId RunResponse
         , API.getStepNotes runId StepNotesResponse
         , API.getTestRunAssets runId AssetsResponse
+        , API.getRunProcedure runId ProcedureResponse
         ]
     )
 
@@ -86,11 +87,11 @@ update msg model =
     case msg of
         RunResponse (Ok run) ->
             ( { model | run = Just run, loading = False }
-            , API.getRunProcedure run.id ProcedureResponse
+            , Cmd.none
             )
 
         RunResponse (Err error) ->
-            ( { model | loading = False, error = Just (httpErrorToString error) }
+            ( { model | loading = False, error = Just ("Failed to load test run: " ++ httpErrorToString error) }
             , Cmd.none
             )
 
@@ -100,7 +101,7 @@ update msg model =
             )
 
         ProcedureResponse (Err error) ->
-            ( { model | error = Just (httpErrorToString error) }
+            ( { model | error = Just ("Failed to load procedure: " ++ httpErrorToString error) }
             , Cmd.none
             )
 
@@ -119,8 +120,10 @@ update msg model =
             , Cmd.none
             )
 
-        StepNotesResponse (Err _) ->
-            ( model, Cmd.none )
+        StepNotesResponse (Err error) ->
+            ( { model | error = Just ("Failed to load step notes: " ++ httpErrorToString error) }
+            , Cmd.none
+            )
 
         AssetsResponse (Ok assets) ->
             let
@@ -150,8 +153,10 @@ update msg model =
             , Cmd.none
             )
 
-        AssetsResponse (Err _) ->
-            ( model, Cmd.none )
+        AssetsResponse (Err error) ->
+            ( { model | error = Just ("Failed to load assets: " ++ httpErrorToString error) }
+            , Cmd.none
+            )
 
         StartRun ->
             ( { model | loading = True }

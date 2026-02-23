@@ -196,7 +196,9 @@ testStepDecoder =
     Decode.map3 TestStep
         (Decode.field "name" Decode.string)
         (Decode.field "instructions" Decode.string)
-        (Decode.field "image_paths" (Decode.list Decode.string))
+        (Decode.field "image_paths"
+            (Decode.oneOf [ Decode.list Decode.string, Decode.null [] ])
+        )
 
 
 testProcedureDecoder : Decoder TestProcedure
@@ -310,7 +312,7 @@ testRunAssetDecoder =
         (Decode.field "asset_type" assetTypeDecoder)
         (Decode.field "file_name" Decode.string)
         (Decode.field "asset_path" Decode.string)
-        (Decode.field "description" (Decode.oneOf [ Decode.string, Decode.succeed "" ]))
+        (Decode.oneOf [ Decode.field "description" Decode.string, Decode.succeed "" ])
         (Decode.field "uploaded_at" timeDecoder)
         (Decode.maybe (Decode.field "step_index" Decode.int))
 
@@ -318,7 +320,7 @@ testRunAssetDecoder =
 paginatedDecoder : Decoder a -> Decoder (PaginatedResponse a)
 paginatedDecoder itemDecoder =
     Decode.map4 PaginatedResponse
-        (Decode.field "items" (Decode.list itemDecoder))
+        (Decode.field "items" (Decode.oneOf [ Decode.list itemDecoder, Decode.null [] ]))
         (Decode.field "total" Decode.int)
         (Decode.field "limit" Decode.int)
         (Decode.field "offset" Decode.int)
