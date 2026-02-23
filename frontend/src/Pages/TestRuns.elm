@@ -21,7 +21,6 @@ type alias Model =
     , offset : Int
     , loading : Bool
     , error : Maybe String
-    , navigationTarget : Maybe String
     }
 
 
@@ -34,7 +33,6 @@ init procedureId =
       , offset = 0
       , loading = True
       , error = Nothing
-      , navigationTarget = Nothing
       }
     , API.getTestRuns procedureId 10 0 RunsResponse
     )
@@ -82,12 +80,9 @@ update msg model =
             , API.createTestRun model.procedureId CreateResponse
             )
 
-        CreateResponse (Ok run) ->
-            ( { model
-                | loading = False
-                , navigationTarget = Just run.id
-              }
-            , Cmd.none
+        CreateResponse (Ok _) ->
+            ( { model | loading = True, error = Nothing }
+            , API.getTestRuns model.procedureId model.limit model.offset RunsResponse
             )
 
         CreateResponse (Err error) ->

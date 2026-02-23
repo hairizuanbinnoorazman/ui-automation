@@ -150,6 +150,18 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve full version chain so runs created against any version are included.
+	procedures, err := h.testProcedureStore.GetVersionHistory(r.Context(), procedureID)
+	var procedureIDs []uuid.UUID
+	if err != nil {
+		// Fall back to the single ID if the chain cannot be resolved.
+		procedureIDs = []uuid.UUID{procedureID}
+	} else {
+		for _, p := range procedures {
+			procedureIDs = append(procedureIDs, p.ID)
+		}
+	}
+
 	// Parse query parameters
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
@@ -168,8 +180,8 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get total count of test runs
-	total, err := h.testRunStore.CountByTestProcedure(r.Context(), procedureID)
+	// Get total count of test runs across all versions.
+	total, err := h.testRunStore.CountByTestProcedures(r.Context(), procedureIDs)
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to count test runs", map[string]interface{}{
 			"error":             err.Error(),
@@ -179,8 +191,8 @@ func (h *TestRunHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// List test runs
-	runs, err := h.testRunStore.ListByTestProcedure(r.Context(), procedureID, limit, offset)
+	// List test runs across all versions.
+	runs, err := h.testRunStore.ListByTestProcedures(r.Context(), procedureIDs, limit, offset)
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to list test runs", map[string]interface{}{
 			"error":             err.Error(),
@@ -746,18 +758,22 @@ func (h *TestRunHandler) GetRunProcedure(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	proc, err := h.testProcedureStore.GetByID(r.Context(), tr.TestProcedureID)
+	proc, err := h.testProcedureStore.GetLatestCommitted(r.Context(), tr.TestProcedureID)
 	if err != nil {
-		if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
-			respondError(w, http.StatusNotFound, "test procedure not found")
+		// Fall back to the exact version the run was created against if no committed version found.
+		proc, err = h.testProcedureStore.GetByID(r.Context(), tr.TestProcedureID)
+		if err != nil {
+			if errors.Is(err, testprocedure.ErrTestProcedureNotFound) {
+				respondError(w, http.StatusNotFound, "test procedure not found")
+				return
+			}
+			h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
+				"error":             err.Error(),
+				"test_procedure_id": tr.TestProcedureID,
+			})
+			respondError(w, http.StatusInternalServerError, "failed to get test procedure")
 			return
 		}
-		h.logger.Error(r.Context(), "failed to get test procedure", map[string]interface{}{
-			"error":             err.Error(),
-			"test_procedure_id": tr.TestProcedureID,
-		})
-		respondError(w, http.StatusInternalServerError, "failed to get test procedure")
-		return
 	}
 
 	respondJSON(w, http.StatusOK, proc)

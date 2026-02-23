@@ -145,6 +145,52 @@ func (s *MySQLStore) CountByTestProcedure(ctx context.Context, testProcedureID u
 	return int(count), nil
 }
 
+// ListByTestProcedures retrieves a paginated list of test runs for multiple procedure versions.
+func (s *MySQLStore) ListByTestProcedures(ctx context.Context, ids []uuid.UUID, limit, offset int) ([]*TestRun, error) {
+	if len(ids) == 0 {
+		return []*TestRun{}, nil
+	}
+	var testRuns []*TestRun
+	err := s.db.WithContext(ctx).
+		Where("test_procedure_id IN ?", ids).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&testRuns).Error
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to list test runs by test procedures", map[string]interface{}{
+			"error":  err.Error(),
+			"limit":  limit,
+			"offset": offset,
+		})
+		return nil, err
+	}
+
+	return testRuns, nil
+}
+
+// CountByTestProcedures returns the total count of test runs for multiple procedure versions.
+func (s *MySQLStore) CountByTestProcedures(ctx context.Context, ids []uuid.UUID) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	var count int64
+	err := s.db.WithContext(ctx).
+		Model(&TestRun{}).
+		Where("test_procedure_id IN ?", ids).
+		Count(&count).Error
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to count test runs by test procedures", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return 0, err
+	}
+
+	return int(count), nil
+}
+
 // Start marks a test run as started (sets started_at, changes status to running).
 func (s *MySQLStore) Start(ctx context.Context, id uuid.UUID) error {
 	// Fetch the test run

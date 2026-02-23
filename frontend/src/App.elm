@@ -421,19 +421,9 @@ update msg model =
                         ( newModel, cmd ) =
                             TestRuns.update subMsg testRunsModel
                     in
-                    case newModel.navigationTarget of
-                        Just runId ->
-                            ( { model | testRunsModel = Just { newModel | navigationTarget = Nothing } }
-                            , Cmd.batch
-                                [ Cmd.map TestRunsMsg cmd
-                                , Nav.pushUrl model.key ("/runs/" ++ runId)
-                                ]
-                            )
-
-                        Nothing ->
-                            ( { model | testRunsModel = Just newModel }
-                            , Cmd.map TestRunsMsg cmd
-                            )
+                    ( { model | testRunsModel = Just newModel }
+                    , Cmd.map TestRunsMsg cmd
+                    )
 
                 Nothing ->
                     ( model, Cmd.none )
