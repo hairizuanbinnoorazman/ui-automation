@@ -300,8 +300,19 @@ update msg model =
             ( { newModel | sessionCheckStatus = SessionChecked }, cmd )
 
         SessionCheckResponse (Err _) ->
-            -- No valid session or error - user stays on login/current page
-            ( { model | sessionCheckStatus = SessionChecked }, Cmd.none )
+            let
+                cmd =
+                    case model.route of
+                        Login ->
+                            Cmd.none
+
+                        Register ->
+                            Cmd.none
+
+                        _ ->
+                            Nav.pushUrl model.key "/"
+            in
+            ( { model | sessionCheckStatus = SessionChecked }, cmd )
 
         ToggleDrawer ->
             ( { model | drawerOpen = not model.drawerOpen }, Cmd.none )
