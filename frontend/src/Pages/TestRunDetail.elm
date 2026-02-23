@@ -401,6 +401,15 @@ viewRunHeader model =
                             ]
                             [ Html.text (statusToString run.status) ]
                         ]
+                    , case model.procedure of
+                        Just proc ->
+                            Html.div []
+                                [ Html.strong [] [ Html.text "Procedure Version: " ]
+                                , Html.text ("v" ++ String.fromInt proc.version)
+                                ]
+
+                        Nothing ->
+                            Html.text ""
                     , Html.div []
                         [ Html.strong [] [ Html.text "Created: " ]
                         , Html.text (formatTime run.createdAt)
