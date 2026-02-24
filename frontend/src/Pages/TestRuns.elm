@@ -140,6 +140,7 @@ viewRunsTable runs =
         [ Html.thead []
             [ Html.tr []
                 [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Status" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Version" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Created" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Actions" ]
                 ]
@@ -153,6 +154,7 @@ viewRunRow : TestRun -> Html Msg
 viewRunRow run =
     Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
         [ Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (statusToString run.status) ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text ("v" ++ String.fromInt run.procedureVersion) ]
         , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (formatTime run.createdAt) ]
         , Html.td [ Html.Attributes.style "padding" "12px" ]
             [ Html.a
