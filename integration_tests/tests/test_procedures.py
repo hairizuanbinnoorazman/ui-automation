@@ -109,8 +109,8 @@ class TestUpdateProcedure:
             description="Updated description",
         )
         assert resp["description"] == "Updated description"
-        # Version should not change for in-place update
-        assert resp["version"] == procedure["version"]
+        # Update endpoint now returns the draft (version 0)
+        assert resp["version"] == 0
 
 
 class TestVersioning:

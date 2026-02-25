@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -498,6 +499,7 @@ func (h *TestRunHandler) UploadAsset(w http.ResponseWriter, r *http.Request) {
 		MimeType:    header.Header.Get("Content-Type"),
 		Description: description,
 		StepIndex:   stepIndex,
+		UploadedAt:  time.Now(),
 	}
 
 	if err := h.assetStore.Create(r.Context(), asset); err != nil {

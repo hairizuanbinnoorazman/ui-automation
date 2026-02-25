@@ -32,7 +32,9 @@ func (s *MySQLStore) Create(ctx context.Context, user *User) error {
 
 	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
 		// Check for duplicate key error (MySQL and SQLite)
-		if errors.Is(err, gorm.ErrDuplicatedKey) || strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if errors.Is(err, gorm.ErrDuplicatedKey) ||
+			strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+			strings.Contains(err.Error(), "Duplicate entry") {
 			return ErrDuplicateEmail
 		}
 		s.logger.Error(ctx, "failed to create user", map[string]interface{}{
@@ -110,7 +112,9 @@ func (s *MySQLStore) Update(ctx context.Context, id uuid.UUID, setters ...Update
 	// Save the updated user
 	if err := s.db.WithContext(ctx).Save(user).Error; err != nil {
 		// Check for duplicate key error (MySQL and SQLite)
-		if errors.Is(err, gorm.ErrDuplicatedKey) || strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if errors.Is(err, gorm.ErrDuplicatedKey) ||
+			strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+			strings.Contains(err.Error(), "Duplicate entry") {
 			return ErrDuplicateEmail
 		}
 		s.logger.Error(ctx, "failed to update user", map[string]interface{}{
