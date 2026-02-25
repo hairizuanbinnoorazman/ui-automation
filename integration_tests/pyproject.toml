@@ -1,0 +1,20 @@
+[project]
+name = "ui-automation-integration-tests"
+version = "0.1.0"
+description = "Integration tests for UI Automation backend"
+requires-python = ">=3.11"
+dependencies = [
+    "pytest>=8.0",
+    "requests>=2.31",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "auth: authentication endpoint tests",
+    "projects: project CRUD tests",
+    "procedures: test procedure and versioning tests",
+    "runs: test run lifecycle tests",
+    "assets: asset upload/download tests",
+    "flow: end-to-end flow tests",
+]

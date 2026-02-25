@@ -1,0 +1,206 @@
+import os
+from dataclasses import dataclass
+
+import requests
+
+
+@dataclass
+class APIError(Exception):
+    status_code: int
+    body: dict | str
+
+    def __str__(self) -> str:
+        return f"APIError({self.status_code}): {self.body}"
+
+
+class UIAutomationClient:
+    """HTTP client for the UI Automation backend API."""
+
+    def __init__(self, base_url: str | None = None) -> None:
+        if base_url is None:
+            base_url = os.environ.get("BASE_URL")
+        if base_url is None:
+            port = os.environ.get("APP_PORT", "8080")
+            base_url = f"http://localhost:{port}"
+
+        self.base_url = base_url.rstrip("/")
+        self.session = requests.Session()
+
+    def _url(self, path: str) -> str:
+        return f"{self.base_url}/api/v1{path}"
+
+    def _request(self, method: str, path: str, **kwargs) -> dict | list:
+        resp = self.session.request(method, self._url(path), **kwargs)
+        if not resp.ok:
+            try:
+                body = resp.json()
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                body = resp.text
+            raise APIError(status_code=resp.status_code, body=body)
+        if resp.status_code == 204 or not resp.content:
+            return {}
+        return resp.json()
+
+    def _raw_request(self, method: str, path: str, **kwargs) -> requests.Response:
+        resp = self.session.request(method, self._url(path), **kwargs)
+        if not resp.ok:
+            try:
+                body = resp.json()
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                body = resp.text
+            raise APIError(status_code=resp.status_code, body=body)
+        return resp
+
+    # --- Auth ---
+
+    def register(self, email: str, username: str, password: str) -> dict:
+        return self._request("POST", "/auth/register", json={
+            "email": email,
+            "username": username,
+            "password": password,
+        })
+
+    def login(self, email: str, password: str) -> dict:
+        return self._request("POST", "/auth/login", json={
+            "email": email,
+            "password": password,
+        })
+
+    def me(self) -> dict:
+        return self._request("GET", "/auth/me")
+
+    def logout(self) -> dict:
+        return self._request("POST", "/auth/logout")
+
+    # --- Projects ---
+
+    def create_project(self, name: str, description: str = "") -> dict:
+        return self._request("POST", "/projects", json={
+            "name": name,
+            "description": description,
+        })
+
+    def list_projects(self, limit: int = 20, offset: int = 0) -> dict:
+        return self._request("GET", "/projects", params={
+            "limit": limit,
+            "offset": offset,
+        })
+
+    def get_project(self, project_id: str) -> dict:
+        return self._request("GET", f"/projects/{project_id}")
+
+    def update_project(self, project_id: str, **fields) -> dict:
+        return self._request("PUT", f"/projects/{project_id}", json=fields)
+
+    def delete_project(self, project_id: str) -> dict:
+        return self._request("DELETE", f"/projects/{project_id}")
+
+    # --- Test Procedures ---
+
+    def create_procedure(
+        self,
+        project_id: str,
+        name: str,
+        description: str = "",
+        steps: list[dict] | None = None,
+    ) -> dict:
+        payload: dict = {"name": name, "description": description}
+        if steps is not None:
+            payload["steps"] = steps
+        return self._request(
+            "POST", f"/projects/{project_id}/procedures", json=payload,
+        )
+
+    def list_procedures(
+        self, project_id: str, limit: int = 20, offset: int = 0,
+    ) -> dict:
+        return self._request(
+            "GET", f"/projects/{project_id}/procedures",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def get_procedure(self, project_id: str, procedure_id: str) -> dict:
+        return self._request(
+            "GET", f"/projects/{project_id}/procedures/{procedure_id}",
+        )
+
+    def update_procedure(
+        self, project_id: str, procedure_id: str, **fields,
+    ) -> dict:
+        return self._request(
+            "PUT", f"/projects/{project_id}/procedures/{procedure_id}",
+            json=fields,
+        )
+
+    def create_version(self, project_id: str, procedure_id: str) -> dict:
+        return self._request(
+            "POST",
+            f"/projects/{project_id}/procedures/{procedure_id}/versions",
+        )
+
+    def get_version_history(
+        self, project_id: str, procedure_id: str,
+    ) -> list:
+        return self._request(
+            "GET",
+            f"/projects/{project_id}/procedures/{procedure_id}/versions",
+        )
+
+    # --- Test Runs ---
+
+    def create_run(self, procedure_id: str) -> dict:
+        return self._request("POST", f"/procedures/{procedure_id}/runs")
+
+    def list_runs(
+        self, procedure_id: str, limit: int = 20, offset: int = 0,
+    ) -> dict:
+        return self._request(
+            "GET", f"/procedures/{procedure_id}/runs",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def get_run(self, run_id: str) -> dict:
+        return self._request("GET", f"/runs/{run_id}")
+
+    def update_run(self, run_id: str, **fields) -> dict:
+        return self._request("PUT", f"/runs/{run_id}", json=fields)
+
+    def start_run(self, run_id: str) -> dict:
+        return self._request("POST", f"/runs/{run_id}/start")
+
+    def complete_run(self, run_id: str, status: str, notes: str = "") -> dict:
+        payload: dict = {"status": status}
+        if notes:
+            payload["notes"] = notes
+        return self._request("POST", f"/runs/{run_id}/complete", json=payload)
+
+    # --- Assets ---
+
+    def upload_asset(
+        self,
+        run_id: str,
+        file_path: str,
+        asset_type: str,
+        description: str = "",
+        step_index: int | None = None,
+    ) -> dict:
+        with open(file_path, "rb") as f:
+            files = {"file": (os.path.basename(file_path), f)}
+            data: dict = {"asset_type": asset_type}
+            if description:
+                data["description"] = description
+            if step_index is not None:
+                data["step_index"] = str(step_index)
+            return self._request(
+                "POST", f"/runs/{run_id}/assets", files=files, data=data,
+            )
+
+    def list_assets(self, run_id: str) -> list:
+        return self._request("GET", f"/runs/{run_id}/assets")
+
+    def download_asset(self, run_id: str, asset_id: str) -> bytes:
+        resp = self._raw_request("GET", f"/runs/{run_id}/assets/{asset_id}")
+        return resp.content
+
+    def delete_asset(self, run_id: str, asset_id: str) -> dict:
+        return self._request("DELETE", f"/runs/{run_id}/assets/{asset_id}")

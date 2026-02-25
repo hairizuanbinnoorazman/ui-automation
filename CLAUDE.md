@@ -83,10 +83,42 @@ docker run -p 8080:80 ui-automation-frontend
 The Dockerfile still builds Elm from source for self-contained deployments.
 
 ### Integration Testing
+
+Integration tests use **pytest** with **uv** for dependency management, located in `integration_tests/`.
+
 ```bash
-# Run full integration test suite (requires running backend)
-./test_integration.sh
+# Run integration tests (requires running backend + database via docker compose)
+make integration-test
+
+# Run specific test category
+cd integration_tests && uv sync && uv run pytest -v -m "auth"
+# Available markers: auth, projects, procedures, runs, assets, flow
 ```
+
+**Prerequisites**: The backend and database must be running (e.g., via `make docker-dev`). Tests hit the live API at `http://localhost:$APP_PORT`.
+
+### Verification Workflow
+
+After making changes, run these checks to prevent regressions:
+
+```bash
+# 1. Backend compilation check
+make build
+
+# 2. Frontend compilation check
+cd frontend && elm make src/App.elm --output=elm.js
+
+# 3. Backend unit tests
+make test
+
+# 4. Integration tests (requires running stack)
+# Start the stack first if not running:
+make docker-dev
+# Then run integration tests:
+make integration-test
+```
+
+**At minimum**, always run steps 1-3 (compilation + unit tests) before considering a change complete. Run step 4 (integration tests) when changes touch API handlers, store implementations, or database migrations.
 
 ## Architecture Patterns
 
@@ -257,6 +289,10 @@ func (h *TestProcedureHandler) MyHandler(w http.ResponseWriter, r *http.Request)
 6. Add Elm types to `frontend/src/Types.elm`
 7. Add API functions to `frontend/src/API.elm`
 8. Create page module in `frontend/src/Pages/{Domain}.elm`
+9. Add unit tests in `{domain}/*_test.go` for store operations
+10. Add integration tests in `integration_tests/tests/test_{domain}.py` for API endpoints
+11. Add API client methods to `integration_tests/client/api_client.py`
+12. Run full verification: `make build && make test && make integration-test`
 
 ### Database Migration
 ```bash
@@ -275,13 +311,29 @@ make migrate-down
 
 **Backend**: Table-driven tests using `testutil.SetupTestDB()` for isolated database tests
 **Frontend**: Elm's type system prevents many runtime errors; manual testing in browser
-**Integration**: Shell script (`test_integration.sh`) exercises full API workflow
+**Integration**: pytest suite in `integration_tests/` exercises full API workflow (auth, projects, procedures, runs, assets)
 
 When writing backend tests:
 - Use `{domain}/common_test.go` for shared test setup
 - Always use `t.Parallel()` for concurrent test execution
 - Create fresh database instance per test with testutil
 - Mock external dependencies (storage, sessions) when appropriate
+
+When writing integration tests:
+- Add tests to the appropriate file in `integration_tests/tests/` based on domain
+- Use the `UIAutomationClient` from `integration_tests/client/` for API calls
+- Use pytest markers (`@pytest.mark.<domain>`) for categorization
+- Session-scoped fixtures (e.g., `authenticated_client`) are shared across tests; use `fresh_client` for unauthenticated scenarios
+- Always place imports at the top of the file. Do not use inline imports inside functions.
+
+### Mandatory Test Coverage
+
+**When adding new features, always add both unit tests and integration tests to cover those cases unless explicitly told by the user not to do so.** Specifically:
+
+- **New API endpoint**: Add handler unit tests + integration test in the relevant `integration_tests/tests/test_*.py` file
+- **New domain entity**: Add store-level unit tests in `{domain}/*_test.go` + integration tests for the full API flow
+- **Bug fix**: Add a regression test (unit or integration) that reproduces the bug before fixing it
+- **Database migration**: Verify with integration tests that existing flows still work after the migration
 
 ## Common Gotchas
 
