@@ -1,4 +1,4 @@
-"""End-to-end integration test that mirrors the original test_integration.sh flow."""
+"""End-to-end integration test covering the full application flow."""
 
 import base64
 import os
@@ -25,7 +25,7 @@ _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
 def test_full_integration_flow(base_url: str):
-    """Replicate the full flow from test_integration.sh with real assertions."""
+    """Full application flow with real assertions."""
     suffix = uuid.uuid4().hex[:8]
     client = UIAutomationClient(base_url)
 

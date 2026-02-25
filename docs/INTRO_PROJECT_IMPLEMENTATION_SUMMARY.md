@@ -196,7 +196,7 @@ User
 
 ### Documentation
 - Comprehensive README.md update
-- Integration test script (test_integration.sh)
+- Integration test suite (integration_tests/)
 - This implementation summary
 
 ## Verification Results
@@ -283,7 +283,7 @@ make migrate-up
 make run
 
 # Run integration tests
-./test_integration.sh
+make integration-test
 
 # Run unit tests
 make test
