@@ -16,7 +16,7 @@ endif
 export APP_PORT
 export WORKSPACE_SUFFIX
 
-.PHONY: build run test migrate-up migrate-down clean install-deps docker-dev docker-build-elm docker-check-elm docker-rebuild-elm
+.PHONY: build run test migrate-up migrate-down clean install-deps docker-dev docker-build-elm docker-check-elm docker-rebuild-elm integration-test
 
 BINARY_NAME=backend
 CONFIG_FILE=config.yaml
@@ -65,3 +65,6 @@ docker-dev: docker-check-elm
 # Rebuild elm.js and restart frontend container
 docker-rebuild-elm: docker-build-elm
 	docker compose restart frontend
+
+integration-test:
+	cd integration_tests && uv sync && APP_PORT=$(APP_PORT) uv run pytest -v

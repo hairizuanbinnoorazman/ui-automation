@@ -43,3 +43,8 @@ cookies.txt
 
 # Generated JS files
 frontend/*.js
+
+# Python integration tests
+integration_tests/.venv/
+__pycache__/
+*.pyc
