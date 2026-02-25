@@ -8,6 +8,7 @@ import uuid
 import pytest
 
 from client import (
+    APIError,
     ASSET_IMAGE,
     STATUS_PASSED,
     STATUS_PENDING,
@@ -214,7 +215,6 @@ def test_full_integration_flow(base_url: str):
     client.logout()
 
     # Verify session is invalidated
-    from client import APIError
     with pytest.raises(APIError) as exc_info:
         client.me()
     assert exc_info.value.status_code == 401

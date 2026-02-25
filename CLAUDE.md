@@ -324,6 +324,7 @@ When writing integration tests:
 - Use the `UIAutomationClient` from `integration_tests/client/` for API calls
 - Use pytest markers (`@pytest.mark.<domain>`) for categorization
 - Session-scoped fixtures (e.g., `authenticated_client`) are shared across tests; use `fresh_client` for unauthenticated scenarios
+- Always place imports at the top of the file. Do not use inline imports inside functions.
 
 ### Mandatory Test Coverage
 
