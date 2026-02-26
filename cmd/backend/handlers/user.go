@@ -56,8 +56,16 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// List users
-	users, err := h.userStore.List(r.Context(), limit, offset)
+	// Check for search query
+	searchQuery := r.URL.Query().Get("search")
+
+	var users []*user.User
+	var err error
+	if searchQuery != "" {
+		users, err = h.userStore.Search(r.Context(), searchQuery, limit, offset)
+	} else {
+		users, err = h.userStore.List(r.Context(), limit, offset)
+	}
 	if err != nil {
 		h.logger.Error(r.Context(), "failed to list users", map[string]interface{}{
 			"error": err.Error(),

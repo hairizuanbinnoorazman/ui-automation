@@ -133,3 +133,74 @@ class TestUpdateRun:
             run["id"], notes="Updated notes",
         )
         assert updated["notes"] == "Updated notes"
+
+
+class TestAssignUser:
+    def test_default_assigned_to_is_null(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        fetched = authenticated_client.get_run(run["id"])
+        assert fetched.get("assigned_to") is None
+
+    def test_assign_user_to_run(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        me = authenticated_client.me()
+        updated = authenticated_client.assign_run(run["id"], me["id"])
+        assert updated["assigned_to"] == me["id"]
+
+    def test_unassign_user_from_run(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        me = authenticated_client.me()
+        authenticated_client.assign_run(run["id"], me["id"])
+        updated = authenticated_client.unassign_run(run["id"])
+        assert updated.get("assigned_to") is None
+
+    def test_assign_invalid_user_returns_error(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        with pytest.raises(APIError) as exc_info:
+            authenticated_client.assign_run(
+                run["id"], "00000000-0000-0000-0000-000000000000",
+            )
+        assert exc_info.value.status_code == 400
+
+
+class TestUserSearch:
+    def test_search_users(
+        self,
+        authenticated_client: UIAutomationClient,
+    ):
+        me = authenticated_client.me()
+        result = authenticated_client.list_users(search=me["username"])
+        assert "users" in result
+        assert len(result["users"]) >= 1
+        usernames = [u["username"] for u in result["users"]]
+        assert me["username"] in usernames
+
+    def test_search_users_no_results(
+        self,
+        authenticated_client: UIAutomationClient,
+    ):
+        result = authenticated_client.list_users(
+            search="nonexistent_user_xyz_12345",
+        )
+        assert "users" in result
+        assert len(result["users"]) == 0

@@ -9,7 +9,7 @@ import Html.Events
 import Http
 import Json.Decode as Decode
 import Time
-import Types exposing (CompleteTestRunInput, TestProcedure, TestRun, TestRunAsset, TestRunStepNote, TestRunStatus)
+import Types exposing (CompleteTestRunInput, TestProcedure, TestRun, TestRunAsset, TestRunStepNote, TestRunStatus, User, UserListResponse)
 
 
 
@@ -19,6 +19,14 @@ import Types exposing (CompleteTestRunInput, TestProcedure, TestRun, TestRunAsse
 type alias CompleteDialogState =
     { status : TestRunStatus
     , notes : String
+    }
+
+
+type alias AssignDialogState =
+    { searchQuery : String
+    , searchResults : List User
+    , selectedUser : Maybe User
+    , loading : Bool
     }
 
 
@@ -33,6 +41,8 @@ type alias Model =
     , loading : Bool
     , error : Maybe String
     , completeDialog : Maybe CompleteDialogState
+    , assignDialog : Maybe AssignDialogState
+    , assignedUser : Maybe User
     }
 
 
@@ -48,6 +58,8 @@ init runId =
       , loading = True
       , error = Nothing
       , completeDialog = Nothing
+      , assignDialog = Nothing
+      , assignedUser = Nothing
       }
     , Cmd.batch
         [ API.getTestRun runId RunResponse
@@ -80,14 +92,33 @@ type Msg
     | StepNoteSaved Int (Result Http.Error TestRunStepNote)
     | FileSelected Int File
     | UploadAssetResponse Int (Result Http.Error TestRunAsset)
+    | OpenAssignDialog
+    | CloseAssignDialog
+    | SetAssignSearchQuery String
+    | SearchUsersResponse (Result Http.Error UserListResponse)
+    | SelectAssignUser User
+    | SubmitAssign
+    | AssignResponse (Result Http.Error TestRun)
+    | UnassignUser
+    | UnassignResponse (Result Http.Error TestRun)
+    | AssignedUserResponse (Result Http.Error User)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         RunResponse (Ok run) ->
+            let
+                fetchAssignedUser =
+                    case run.assignedTo of
+                        Just userId ->
+                            API.getUserById userId AssignedUserResponse
+
+                        Nothing ->
+                            Cmd.none
+            in
             ( { model | run = Just run, loading = False }
-            , Cmd.none
+            , fetchAssignedUser
             )
 
         RunResponse (Err error) ->
@@ -295,6 +326,132 @@ update msg model =
             , Cmd.none
             )
 
+        OpenAssignDialog ->
+            ( { model
+                | assignDialog =
+                    Just
+                        { searchQuery = ""
+                        , searchResults = []
+                        , selectedUser = Nothing
+                        , loading = False
+                        }
+              }
+            , Cmd.none
+            )
+
+        CloseAssignDialog ->
+            ( { model | assignDialog = Nothing }
+            , Cmd.none
+            )
+
+        SetAssignSearchQuery query ->
+            case model.assignDialog of
+                Just dialog ->
+                    let
+                        updatedDialog =
+                            { dialog | searchQuery = query, loading = True }
+
+                        cmd =
+                            if String.length query >= 2 then
+                                API.searchUsers query SearchUsersResponse
+
+                            else
+                                Cmd.none
+                    in
+                    ( { model | assignDialog = Just updatedDialog }
+                    , cmd
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SearchUsersResponse (Ok response) ->
+            case model.assignDialog of
+                Just dialog ->
+                    ( { model | assignDialog = Just { dialog | searchResults = response.users, loading = False } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SearchUsersResponse (Err _) ->
+            case model.assignDialog of
+                Just dialog ->
+                    ( { model | assignDialog = Just { dialog | loading = False } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SelectAssignUser selectedUser ->
+            case model.assignDialog of
+                Just dialog ->
+                    ( { model | assignDialog = Just { dialog | selectedUser = Just selectedUser } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SubmitAssign ->
+            case model.assignDialog of
+                Just dialog ->
+                    case dialog.selectedUser of
+                        Just selectedUser ->
+                            ( { model | loading = True }
+                            , API.assignTestRunUser model.runId selectedUser.id AssignResponse
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        AssignResponse (Ok run) ->
+            let
+                fetchAssignedUser =
+                    case run.assignedTo of
+                        Just userId ->
+                            API.getUserById userId AssignedUserResponse
+
+                        Nothing ->
+                            Cmd.none
+            in
+            ( { model | run = Just run, loading = False, assignDialog = Nothing }
+            , fetchAssignedUser
+            )
+
+        AssignResponse (Err error) ->
+            ( { model | loading = False, error = Just (httpErrorToString error) }
+            , Cmd.none
+            )
+
+        UnassignUser ->
+            ( { model | loading = True }
+            , API.unassignTestRunUser model.runId UnassignResponse
+            )
+
+        UnassignResponse (Ok run) ->
+            ( { model | run = Just run, loading = False, assignedUser = Nothing }
+            , Cmd.none
+            )
+
+        UnassignResponse (Err error) ->
+            ( { model | loading = False, error = Just (httpErrorToString error) }
+            , Cmd.none
+            )
+
+        AssignedUserResponse (Ok fetchedUser) ->
+            ( { model | assignedUser = Just fetchedUser }
+            , Cmd.none
+            )
+
+        AssignedUserResponse (Err _) ->
+            ( model, Cmd.none )
+
 
 
 -- VIEW
@@ -332,6 +489,12 @@ view model =
         , case model.completeDialog of
             Just dialog ->
                 viewCompleteDialog dialog
+
+            Nothing ->
+                Html.text ""
+        , case model.assignDialog of
+            Just dialog ->
+                viewAssignDialog dialog
 
             Nothing ->
                 Html.text ""
@@ -432,6 +595,40 @@ viewRunHeader model =
 
                         Nothing ->
                             Html.text ""
+                    , Html.div
+                        [ Html.Attributes.style "display" "flex"
+                        , Html.Attributes.style "align-items" "center"
+                        , Html.Attributes.style "gap" "8px"
+                        ]
+                        [ Html.strong [] [ Html.text "Assigned To: " ]
+                        , case model.assignedUser of
+                            Just assignedUser ->
+                                Html.span [] [ Html.text assignedUser.username ]
+
+                            Nothing ->
+                                case run.assignedTo of
+                                    Just _ ->
+                                        Html.span [ Html.Attributes.style "color" "#999" ] [ Html.text "Loading..." ]
+
+                                    Nothing ->
+                                        Html.span [ Html.Attributes.style "color" "#999" ] [ Html.text "Unassigned" ]
+                        , Html.button
+                            [ Html.Events.onClick OpenAssignDialog
+                            , Html.Attributes.class "mdc-button mdc-button--outlined"
+                            , Html.Attributes.style "font-size" "12px"
+                            , Html.Attributes.style "padding" "2px 8px"
+                            , Html.Attributes.style "min-height" "0"
+                            ]
+                            [ Html.text
+                                (case run.assignedTo of
+                                    Just _ ->
+                                        "Reassign"
+
+                                    Nothing ->
+                                        "Assign"
+                                )
+                            ]
+                        ]
                     ]
                 ]
 
@@ -686,6 +883,158 @@ viewCompleteDialog dialog =
                     [ Html.text "Complete" ]
                 ]
             ]
+        ]
+
+
+
+viewAssignDialog : AssignDialogState -> Html Msg
+viewAssignDialog dialog =
+    Html.div
+        [ Html.Attributes.style "position" "fixed"
+        , Html.Attributes.style "top" "0"
+        , Html.Attributes.style "left" "0"
+        , Html.Attributes.style "width" "100%"
+        , Html.Attributes.style "height" "100%"
+        , Html.Attributes.style "background" "rgba(0,0,0,0.5)"
+        , Html.Attributes.style "display" "flex"
+        , Html.Attributes.style "align-items" "center"
+        , Html.Attributes.style "justify-content" "center"
+        , Html.Attributes.style "z-index" "1000"
+        ]
+        [ Html.div
+            [ Html.Attributes.style "background" "white"
+            , Html.Attributes.style "border-radius" "8px"
+            , Html.Attributes.style "padding" "24px"
+            , Html.Attributes.style "min-width" "360px"
+            , Html.Attributes.style "max-width" "500px"
+            ]
+            [ Html.h2
+                [ Html.Attributes.class "mdc-typography--headline6"
+                , Html.Attributes.style "margin-top" "0"
+                ]
+                [ Html.text "Assign User" ]
+            , Html.div
+                [ Html.Attributes.style "margin-bottom" "16px" ]
+                [ Html.label
+                    [ Html.Attributes.style "display" "block"
+                    , Html.Attributes.style "margin-bottom" "4px"
+                    ]
+                    [ Html.text "Search users" ]
+                , Html.input
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.placeholder "Type username or email..."
+                    , Html.Attributes.value dialog.searchQuery
+                    , Html.Events.onInput SetAssignSearchQuery
+                    , Html.Attributes.style "width" "100%"
+                    , Html.Attributes.style "padding" "8px"
+                    , Html.Attributes.style "border" "1px solid #ccc"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "box-sizing" "border-box"
+                    , Html.Attributes.style "font-size" "14px"
+                    ]
+                    []
+                ]
+            , if not (List.isEmpty dialog.searchResults) then
+                Html.div
+                    [ Html.Attributes.style "max-height" "200px"
+                    , Html.Attributes.style "overflow-y" "auto"
+                    , Html.Attributes.style "border" "1px solid #ddd"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    ]
+                    (List.map (viewUserSearchResult dialog.selectedUser) dialog.searchResults)
+
+              else if dialog.loading then
+                Html.p
+                    [ Html.Attributes.style "color" "#999"
+                    , Html.Attributes.style "font-size" "14px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    ]
+                    [ Html.text "Searching..." ]
+
+              else if String.length dialog.searchQuery >= 2 then
+                Html.p
+                    [ Html.Attributes.style "color" "#999"
+                    , Html.Attributes.style "font-size" "14px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    ]
+                    [ Html.text "No users found" ]
+
+              else
+                Html.text ""
+            , case dialog.selectedUser of
+                Just selectedUser ->
+                    Html.div
+                        [ Html.Attributes.style "margin-bottom" "16px"
+                        , Html.Attributes.style "padding" "8px"
+                        , Html.Attributes.style "background" "#e8f5e9"
+                        , Html.Attributes.style "border-radius" "4px"
+                        ]
+                        [ Html.text ("Selected: " ++ selectedUser.username ++ " (" ++ selectedUser.email ++ ")") ]
+
+                Nothing ->
+                    Html.text ""
+            , Html.div
+                [ Html.Attributes.style "display" "flex"
+                , Html.Attributes.style "justify-content" "flex-end"
+                , Html.Attributes.style "gap" "8px"
+                ]
+                [ Html.button
+                    [ Html.Events.onClick UnassignUser
+                    , Html.Attributes.class "mdc-button"
+                    , Html.Attributes.style "color" "#d32f2f"
+                    ]
+                    [ Html.text "Unassign" ]
+                , Html.button
+                    [ Html.Events.onClick CloseAssignDialog
+                    , Html.Attributes.class "mdc-button"
+                    ]
+                    [ Html.text "Cancel" ]
+                , Html.button
+                    [ Html.Events.onClick SubmitAssign
+                    , Html.Attributes.class "mdc-button mdc-button--raised"
+                    , Html.Attributes.disabled (dialog.selectedUser == Nothing)
+                    ]
+                    [ Html.text "Assign" ]
+                ]
+            ]
+        ]
+
+
+viewUserSearchResult : Maybe User -> User -> Html Msg
+viewUserSearchResult selectedUser resultUser =
+    let
+        isSelected =
+            case selectedUser of
+                Just sel ->
+                    sel.id == resultUser.id
+
+                Nothing ->
+                    False
+    in
+    Html.div
+        [ Html.Events.onClick (SelectAssignUser resultUser)
+        , Html.Attributes.style "padding" "8px 12px"
+        , Html.Attributes.style "cursor" "pointer"
+        , Html.Attributes.style "border-bottom" "1px solid #eee"
+        , Html.Attributes.style "background"
+            (if isSelected then
+                "#e3f2fd"
+
+             else
+                "white"
+            )
+        ]
+        [ Html.div
+            [ Html.Attributes.style "font-weight" "bold"
+            , Html.Attributes.style "font-size" "14px"
+            ]
+            [ Html.text resultUser.username ]
+        , Html.div
+            [ Html.Attributes.style "font-size" "12px"
+            , Html.Attributes.style "color" "#666"
+            ]
+            [ Html.text resultUser.email ]
         ]
 
 

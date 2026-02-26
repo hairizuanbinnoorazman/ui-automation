@@ -1,0 +1,1 @@
+ALTER TABLE test_runs ADD COLUMN assigned_to CHAR(36) NULL DEFAULT NULL, ADD INDEX idx_assigned_to (assigned_to), ADD CONSTRAINT fk_test_runs_assigned_to FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL

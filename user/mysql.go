@@ -177,3 +177,26 @@ func (s *MySQLStore) List(ctx context.Context, limit, offset int) ([]*User, erro
 
 	return users, nil
 }
+
+// Search searches for active users by username or email.
+func (s *MySQLStore) Search(ctx context.Context, query string, limit, offset int) ([]*User, error) {
+	var users []*User
+	pattern := "%" + query + "%"
+	err := s.db.WithContext(ctx).
+		Where("is_active = ? AND (username LIKE ? OR email LIKE ?)", true, pattern, pattern).
+		Limit(limit).
+		Offset(offset).
+		Find(&users).Error
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to search users", map[string]interface{}{
+			"error":  err.Error(),
+			"query":  query,
+			"limit":  limit,
+			"offset": offset,
+		})
+		return nil, err
+	}
+
+	return users, nil
+}
