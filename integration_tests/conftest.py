@@ -53,6 +53,32 @@ def authenticated_client(
         pass
 
 
+@pytest.fixture(scope="session")
+def second_user_credentials(unique_suffix: str) -> dict:
+    return {
+        "email": f"test2-{unique_suffix}@example.com",
+        "username": f"testuser2-{unique_suffix}",
+        "password": "password12345678",
+    }
+
+
+@pytest.fixture(scope="session")
+def second_authenticated_client(
+    base_url: str, second_user_credentials: dict,
+) -> UIAutomationClient:
+    client = UIAutomationClient(base_url)
+    client.register(**second_user_credentials)
+    client.login(
+        second_user_credentials["email"],
+        second_user_credentials["password"],
+    )
+    yield client
+    try:
+        client.logout()
+    except Exception:
+        pass
+
+
 @pytest.fixture()
 def fresh_client(base_url: str) -> UIAutomationClient:
     return UIAutomationClient(base_url)

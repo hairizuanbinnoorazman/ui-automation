@@ -274,6 +274,10 @@ func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkTestRunOwnership(w, r, id) {
+		return
+	}
+
 	// Parse request body
 	var req UpdateTestRunRequest
 	if err := parseJSON(r, &req, h.logger); err != nil {

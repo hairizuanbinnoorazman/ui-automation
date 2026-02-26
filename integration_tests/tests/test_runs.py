@@ -182,6 +182,105 @@ class TestAssignUser:
             )
         assert exc_info.value.status_code == 400
 
+    def test_assign_malformed_uuid_returns_400(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        with pytest.raises(APIError) as exc_info:
+            authenticated_client.assign_run(run["id"], "not-a-uuid")
+        assert exc_info.value.status_code == 400
+
+    def test_reassign_user(
+        self,
+        authenticated_client: UIAutomationClient,
+        second_authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        me = authenticated_client.me()
+        second_user = second_authenticated_client.me()
+        authenticated_client.assign_run(run["id"], me["id"])
+        updated = authenticated_client.assign_run(run["id"], second_user["id"])
+        assert updated["assigned_to"] == second_user["id"]
+
+    def test_assign_persists_on_get(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        me = authenticated_client.me()
+        authenticated_client.assign_run(run["id"], me["id"])
+        fetched = authenticated_client.get_run(run["id"])
+        assert fetched["assigned_to"] == me["id"]
+
+    def test_assigned_to_survives_notes_update(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_and_procedure: tuple,
+    ):
+        _, procedure = project_and_procedure
+        run = authenticated_client.create_run(procedure["id"])
+        me = authenticated_client.me()
+        authenticated_client.assign_run(run["id"], me["id"])
+        updated = authenticated_client.update_run(run["id"], notes="some notes")
+        assert updated["assigned_to"] == me["id"]
+        assert updated["notes"] == "some notes"
+
+
+class TestAssignUserAuthorization:
+    @pytest.fixture()
+    def other_user_project_and_run(
+        self,
+        authenticated_client: UIAutomationClient,
+    ):
+        """Create a project, procedure, and run owned by the primary user."""
+        project = authenticated_client.create_project(
+            name="Auth Test Project",
+            description="For authorization tests",
+        )
+        procedure = authenticated_client.create_procedure(
+            project_id=project["id"],
+            name="Auth Test Procedure",
+            description="Procedure for auth tests",
+            steps=SAMPLE_STEPS,
+        )
+        run = authenticated_client.create_run(procedure["id"])
+        yield project, run
+        try:
+            authenticated_client.delete_project(project["id"])
+        except APIError:
+            pass
+
+    def test_other_user_cannot_assign_run(
+        self,
+        second_authenticated_client: UIAutomationClient,
+        other_user_project_and_run: tuple,
+    ):
+        _, run = other_user_project_and_run
+        second_user = second_authenticated_client.me()
+        with pytest.raises(APIError) as exc_info:
+            second_authenticated_client.assign_run(run["id"], second_user["id"])
+        assert exc_info.value.status_code == 403
+
+    def test_other_user_cannot_unassign_run(
+        self,
+        authenticated_client: UIAutomationClient,
+        second_authenticated_client: UIAutomationClient,
+        other_user_project_and_run: tuple,
+    ):
+        _, run = other_user_project_and_run
+        me = authenticated_client.me()
+        authenticated_client.assign_run(run["id"], me["id"])
+        with pytest.raises(APIError) as exc_info:
+            second_authenticated_client.unassign_run(run["id"])
+        assert exc_info.value.status_code == 403
+
 
 class TestUserSearch:
     def test_search_users(
@@ -204,3 +303,11 @@ class TestUserSearch:
         )
         assert "users" in result
         assert len(result["users"]) == 0
+
+    def test_list_users_without_search_param(
+        self,
+        authenticated_client: UIAutomationClient,
+    ):
+        result = authenticated_client.list_users()
+        assert "users" in result
+        assert len(result["users"]) >= 1
