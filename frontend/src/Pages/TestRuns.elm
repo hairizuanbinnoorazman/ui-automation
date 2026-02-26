@@ -1,12 +1,13 @@
 module Pages.TestRuns exposing (Model, Msg, init, update, view)
 
 import API
+import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
 import Time
-import Types exposing (PaginatedResponse, TestRun, TestRunStatus)
+import Types exposing (PaginatedResponse, TestRun, TestRunStatus, User)
 
 
 
@@ -21,6 +22,7 @@ type alias Model =
     , offset : Int
     , loading : Bool
     , error : Maybe String
+    , userCache : Dict String User
     }
 
 
@@ -33,6 +35,7 @@ init procedureId =
       , offset = 0
       , loading = True
       , error = Nothing
+      , userCache = Dict.empty
       }
     , API.getTestRuns procedureId 10 0 RunsResponse
     )
@@ -47,19 +50,32 @@ type Msg
     | LoadPage Int
     | SubmitCreate
     | CreateResponse (Result Http.Error TestRun)
+    | UserFetched String (Result Http.Error User)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         RunsResponse (Ok response) ->
+            let
+                userIds =
+                    response.items
+                        |> List.filterMap .assignedTo
+                        |> List.filter (\uid -> not (Dict.member uid model.userCache))
+                        |> unique
+
+                fetchCmds =
+                    userIds
+                        |> List.map (\uid -> API.getUserById uid (UserFetched uid))
+                        |> Cmd.batch
+            in
             ( { model
                 | runs = response.items
                 , total = response.total
                 , loading = False
                 , error = Nothing
               }
-            , Cmd.none
+            , fetchCmds
             )
 
         RunsResponse (Err error) ->
@@ -93,6 +109,14 @@ update msg model =
             , Cmd.none
             )
 
+        UserFetched userId (Ok user) ->
+            ( { model | userCache = Dict.insert userId user model.userCache }
+            , Cmd.none
+            )
+
+        UserFetched _ (Err _) ->
+            ( model, Cmd.none )
+
 
 
 -- VIEW
@@ -125,13 +149,13 @@ view model =
             Html.div [] [ Html.text "Loading..." ]
 
           else
-            viewRunsTable model.runs
+            viewRunsTable model.userCache model.runs
         , viewPagination model
         ]
 
 
-viewRunsTable : List TestRun -> Html Msg
-viewRunsTable runs =
+viewRunsTable : Dict String User -> List TestRun -> Html Msg
+viewRunsTable userCache runs =
     Html.table
         [ Html.Attributes.class "mdc-data-table__table"
         , Html.Attributes.style "width" "100%"
@@ -142,20 +166,34 @@ viewRunsTable runs =
                 [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Status" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Created" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Procedure Version" ]
+                , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Assigned" ]
                 , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Actions" ]
                 ]
             ]
         , Html.tbody []
-            (List.map viewRunRow runs)
+            (List.map (viewRunRow userCache) runs)
         ]
 
 
-viewRunRow : TestRun -> Html Msg
-viewRunRow run =
+viewRunRow : Dict String User -> TestRun -> Html Msg
+viewRunRow userCache run =
     Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
         [ Html.td [ Html.Attributes.style "padding" "12px" ] [ viewStatus run.status ]
         , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (formatTime run.createdAt) ]
         , Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text (String.fromInt run.procedureVersion) ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ]
+            [ case run.assignedTo of
+                Nothing ->
+                    Html.span [ Html.Attributes.style "color" "#999" ] [ Html.text "Unassigned" ]
+
+                Just userId ->
+                    case Dict.get userId userCache of
+                        Just user ->
+                            Html.text user.username
+
+                        Nothing ->
+                            Html.span [ Html.Attributes.style "color" "#999" ] [ Html.text "Loading..." ]
+            ]
         , Html.td [ Html.Attributes.style "padding" "12px" ]
             [ Html.a
                 [ Html.Attributes.href ("/runs/" ++ run.id)
@@ -331,3 +369,18 @@ viewStatus status =
 
         _ ->
             Html.text (statusToString status)
+
+
+unique : List String -> List String
+unique list =
+    list
+        |> List.foldl
+            (\item ( seen, acc ) ->
+                if Dict.member item seen then
+                    ( seen, acc )
+
+                else
+                    ( Dict.insert item () seen, acc ++ [ item ] )
+            )
+            ( Dict.empty, [] )
+        |> Tuple.second

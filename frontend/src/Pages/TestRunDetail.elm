@@ -555,6 +555,7 @@ viewRunHeader model =
                     [ Html.Attributes.style "display" "flex"
                     , Html.Attributes.style "gap" "24px"
                     , Html.Attributes.style "flex-wrap" "wrap"
+                    , Html.Attributes.style "align-items" "center"
                     ]
                     [ Html.div []
                         [ Html.strong [] [ Html.text "Status: " ]
