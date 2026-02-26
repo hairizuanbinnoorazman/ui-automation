@@ -204,7 +204,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/projects/{project_id}/procedures/{id}/versions", testProcedureHandler.GetVersionHistory).Methods("GET")
 
 	// Test Run routes (protected)
-	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, testProcedureStore, projectStore, stepNoteStore, blobStorage, log)
+	testRunHandler := handlers.NewTestRunHandler(testRunStore, assetStore, testProcedureStore, projectStore, stepNoteStore, userStore, blobStorage, log)
 
 	// List and create runs for a procedure
 	apiRouter.HandleFunc("/procedures/{procedure_id}/runs", testRunHandler.List).Methods("GET")

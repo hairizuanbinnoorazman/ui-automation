@@ -59,6 +59,7 @@ type TestRun struct {
 	ID              uuid.UUID  `json:"id" gorm:"type:char(36);primaryKey"`
 	TestProcedureID uuid.UUID  `json:"test_procedure_id" gorm:"type:char(36);not null;index:idx_test_procedure_id"`
 	ExecutedBy      uuid.UUID  `json:"executed_by" gorm:"type:char(36);not null;index:idx_executed_by"`
+	AssignedTo      *uuid.UUID `json:"assigned_to" gorm:"type:char(36);index:idx_assigned_to"`
 	Status          Status     `json:"status" gorm:"type:varchar(20);not null;default:'pending';index:idx_status"`
 	Notes           string     `json:"notes" gorm:"type:text"`
 	StartedAt       *time.Time `json:"started_at,omitempty" gorm:"index:idx_started_at"`

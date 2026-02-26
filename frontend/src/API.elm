@@ -222,6 +222,26 @@ getProcedureVersions projectId procedureId toMsg =
 
 
 
+-- Users
+
+
+searchUsers : String -> (Result Http.Error UserListResponse -> msg) -> Cmd msg
+searchUsers query toMsg =
+    Http.get
+        { url = baseUrl ++ "/users?search=" ++ query ++ "&limit=10"
+        , expect = Http.expectJson toMsg userListResponseDecoder
+        }
+
+
+getUserById : String -> (Result Http.Error User -> msg) -> Cmd msg
+getUserById userId toMsg =
+    Http.get
+        { url = baseUrl ++ "/users/" ++ userId
+        , expect = Http.expectJson toMsg userDecoder
+        }
+
+
+
 -- Test Runs
 
 
@@ -257,6 +277,32 @@ updateTestRun runId notes toMsg =
         , headers = []
         , url = baseUrl ++ "/runs/" ++ runId
         , body = Http.jsonBody (Encode.object [ ( "notes", Encode.string notes ) ])
+        , expect = Http.expectJson toMsg testRunDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+assignTestRunUser : String -> String -> (Result Http.Error TestRun -> msg) -> Cmd msg
+assignTestRunUser runId userId toMsg =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = baseUrl ++ "/runs/" ++ runId
+        , body = Http.jsonBody (Encode.object [ ( "assigned_to", Encode.string userId ) ])
+        , expect = Http.expectJson toMsg testRunDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+unassignTestRunUser : String -> (Result Http.Error TestRun -> msg) -> Cmd msg
+unassignTestRunUser runId toMsg =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = baseUrl ++ "/runs/" ++ runId
+        , body = Http.jsonBody (Encode.object [ ( "assigned_to", Encode.string "" ) ])
         , expect = Http.expectJson toMsg testRunDecoder
         , timeout = Nothing
         , tracker = Nothing

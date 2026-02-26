@@ -204,3 +204,17 @@ class UIAutomationClient:
 
     def delete_asset(self, run_id: str, asset_id: str) -> dict:
         return self._request("DELETE", f"/runs/{run_id}/assets/{asset_id}")
+
+    # --- Users ---
+
+    def list_users(self, search: str = "", limit: int = 20, offset: int = 0) -> dict:
+        params: dict = {"limit": limit, "offset": offset}
+        if search:
+            params["search"] = search
+        return self._request("GET", "/users", params=params)
+
+    def assign_run(self, run_id: str, user_id: str) -> dict:
+        return self._request("PUT", f"/runs/{run_id}", json={"assigned_to": user_id})
+
+    def unassign_run(self, run_id: str) -> dict:
+        return self._request("PUT", f"/runs/{run_id}", json={"assigned_to": ""})

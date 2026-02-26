@@ -34,6 +34,9 @@ type Store interface {
 
 	// List retrieves a paginated list of active users.
 	List(ctx context.Context, limit, offset int) ([]*User, error)
+
+	// Search searches for active users by username or email.
+	Search(ctx context.Context, query string, limit, offset int) ([]*User, error)
 }
 
 // UpdateSetter is a function that updates a user field.

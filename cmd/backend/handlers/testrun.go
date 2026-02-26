@@ -19,6 +19,7 @@ import (
 	"github.com/hairizuan-noorazman/ui-automation/storage"
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 	"github.com/hairizuan-noorazman/ui-automation/testrun"
+	"github.com/hairizuan-noorazman/ui-automation/user"
 )
 
 const (
@@ -33,18 +34,20 @@ type TestRunHandler struct {
 	testProcedureStore testprocedure.Store
 	projectStore       project.Store
 	stepNoteStore      testrun.StepNoteStore
+	userStore          user.Store
 	storage            storage.BlobStorage
 	logger             logger.Logger
 }
 
 // NewTestRunHandler creates a new test run handler.
-func NewTestRunHandler(testRunStore testrun.Store, assetStore testrun.AssetStore, testProcedureStore testprocedure.Store, projectStore project.Store, stepNoteStore testrun.StepNoteStore, storage storage.BlobStorage, log logger.Logger) *TestRunHandler {
+func NewTestRunHandler(testRunStore testrun.Store, assetStore testrun.AssetStore, testProcedureStore testprocedure.Store, projectStore project.Store, stepNoteStore testrun.StepNoteStore, userStore user.Store, storage storage.BlobStorage, log logger.Logger) *TestRunHandler {
 	return &TestRunHandler{
 		testRunStore:       testRunStore,
 		assetStore:         assetStore,
 		testProcedureStore: testProcedureStore,
 		projectStore:       projectStore,
 		stepNoteStore:      stepNoteStore,
+		userStore:          userStore,
 		storage:            storage,
 		logger:             log,
 	}
@@ -106,7 +109,8 @@ type testRunWithVersion struct {
 
 // UpdateTestRunRequest represents a test run update request.
 type UpdateTestRunRequest struct {
-	Notes *string `json:"notes,omitempty"`
+	Notes      *string `json:"notes,omitempty"`
+	AssignedTo *string `json:"assigned_to,omitempty"`
 }
 
 // CompleteTestRunRequest represents a test run completion request.
@@ -270,6 +274,10 @@ func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkTestRunOwnership(w, r, id) {
+		return
+	}
+
 	// Parse request body
 	var req UpdateTestRunRequest
 	if err := parseJSON(r, &req, h.logger); err != nil {
@@ -281,6 +289,35 @@ func (h *TestRunHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var setters []testrun.UpdateSetter
 	if req.Notes != nil {
 		setters = append(setters, testrun.SetNotes(*req.Notes))
+	}
+
+	if req.AssignedTo != nil {
+		if *req.AssignedTo == "" {
+			// Empty string means unassign
+			setters = append(setters, testrun.ClearAssignedTo())
+		} else {
+			// Validate UUID
+			assignedToID, err := uuid.Parse(*req.AssignedTo)
+			if err != nil {
+				respondError(w, http.StatusBadRequest, "invalid assigned_to user ID")
+				return
+			}
+			// Validate user exists
+			_, err = h.userStore.GetByID(r.Context(), assignedToID)
+			if err != nil {
+				if errors.Is(err, user.ErrUserNotFound) {
+					respondError(w, http.StatusBadRequest, "assigned user not found")
+					return
+				}
+				h.logger.Error(r.Context(), "failed to verify assigned user", map[string]interface{}{
+					"error":   err.Error(),
+					"user_id": assignedToID,
+				})
+				respondError(w, http.StatusInternalServerError, "failed to verify assigned user")
+				return
+			}
+			setters = append(setters, testrun.SetAssignedTo(assignedToID))
+		}
 	}
 
 	if len(setters) == 0 {

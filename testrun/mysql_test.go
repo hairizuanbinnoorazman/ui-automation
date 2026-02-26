@@ -107,6 +107,55 @@ func TestMySQLStore_Update(t *testing.T) {
 	})
 }
 
+func TestMySQLStore_AssignedTo(t *testing.T) {
+	_, store, _ := setupTestStore(t)
+	ctx := context.Background()
+
+	t.Run("default assigned_to is nil", func(t *testing.T) {
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
+		require.NoError(t, store.Create(ctx, tr))
+
+		retrieved, err := store.GetByID(ctx, tr.ID)
+		require.NoError(t, err)
+		assert.Nil(t, retrieved.AssignedTo)
+	})
+
+	t.Run("assign user to test run", func(t *testing.T) {
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
+		require.NoError(t, store.Create(ctx, tr))
+
+		assignedUserID := uuid.New()
+		err := store.Update(ctx, tr.ID, SetAssignedTo(assignedUserID))
+		require.NoError(t, err)
+
+		retrieved, err := store.GetByID(ctx, tr.ID)
+		require.NoError(t, err)
+		require.NotNil(t, retrieved.AssignedTo)
+		assert.Equal(t, assignedUserID, *retrieved.AssignedTo)
+	})
+
+	t.Run("unassign user from test run", func(t *testing.T) {
+		testProcedureID := uuid.New()
+		executedBy := uuid.New()
+		tr := createTestRun(testProcedureID, executedBy, StatusPending, "")
+		require.NoError(t, store.Create(ctx, tr))
+
+		assignedUserID := uuid.New()
+		require.NoError(t, store.Update(ctx, tr.ID, SetAssignedTo(assignedUserID)))
+
+		err := store.Update(ctx, tr.ID, ClearAssignedTo())
+		require.NoError(t, err)
+
+		retrieved, err := store.GetByID(ctx, tr.ID)
+		require.NoError(t, err)
+		assert.Nil(t, retrieved.AssignedTo)
+	})
+}
+
 func TestMySQLStore_ListByTestProcedure(t *testing.T) {
 	_, store, _ := setupTestStore(t)
 	ctx := context.Background()

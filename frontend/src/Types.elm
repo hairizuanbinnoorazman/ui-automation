@@ -106,6 +106,7 @@ type TestRunStatus
 type alias TestRun =
     { id : String
     , testProcedureId : String
+    , assignedTo : Maybe String
     , status : TestRunStatus
     , notes : String
     , procedureVersion : Int
@@ -155,6 +156,16 @@ type alias TestRunAsset =
 
 
 
+-- User List Response
+
+
+type alias UserListResponse =
+    { users : List User
+    , total : Int
+    }
+
+
+
 -- Pagination
 
 
@@ -178,6 +189,13 @@ userDecoder =
         (Decode.field "username" Decode.string)
         (Decode.field "created_at" timeDecoder)
         (Decode.field "updated_at" timeDecoder)
+
+
+userListResponseDecoder : Decoder UserListResponse
+userListResponseDecoder =
+    Decode.map2 UserListResponse
+        (Decode.field "users" (Decode.oneOf [ Decode.list userDecoder, Decode.null [] ]))
+        (Decode.field "total" Decode.int)
 
 
 projectDecoder : Decoder Project
@@ -262,21 +280,22 @@ testRunStatusDecoder =
 testRunDecoder : Decoder TestRun
 testRunDecoder =
     Decode.map8
-        (\id testProcedureId status notes startedAt completedAt createdAt updatedAt ->
-            \procedureVersion ->
-                TestRun id testProcedureId status notes procedureVersion startedAt completedAt createdAt updatedAt
+        (\id testProcedureId assignedTo status notes startedAt completedAt createdAt ->
+            \updatedAt procedureVersion ->
+                TestRun id testProcedureId assignedTo status notes procedureVersion startedAt completedAt createdAt updatedAt
         )
         (Decode.field "id" Decode.string)
         (Decode.field "test_procedure_id" Decode.string)
+        (Decode.maybe (Decode.field "assigned_to" Decode.string))
         (Decode.field "status" testRunStatusDecoder)
         (Decode.field "notes" Decode.string)
         (Decode.maybe (Decode.field "started_at" timeDecoder))
         (Decode.maybe (Decode.field "completed_at" timeDecoder))
         (Decode.field "created_at" timeDecoder)
-        (Decode.field "updated_at" timeDecoder)
         |> Decode.andThen
             (\fn ->
-                Decode.map fn
+                Decode.map2 fn
+                    (Decode.field "updated_at" timeDecoder)
                     (Decode.oneOf [ Decode.field "procedure_version" Decode.int, Decode.succeed 0 ])
             )
 

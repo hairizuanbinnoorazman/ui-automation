@@ -180,6 +180,46 @@ func TestMySQLStore_Delete(t *testing.T) {
 	})
 }
 
+func TestMySQLStore_Search(t *testing.T) {
+	_, store := setupTestStore(t)
+	ctx := context.Background()
+
+	// Create test users
+	require.NoError(t, store.Create(ctx, createTestUser("alice@example.com", "alice", "password123")))
+	require.NoError(t, store.Create(ctx, createTestUser("bob@example.com", "bob", "password123")))
+	require.NoError(t, store.Create(ctx, createTestUser("charlie@example.com", "charlie", "password123")))
+
+	t.Run("search by username", func(t *testing.T) {
+		users, err := store.Search(ctx, "alice", 10, 0)
+		require.NoError(t, err)
+		assert.Len(t, users, 1)
+		assert.Equal(t, "alice", users[0].Username)
+	})
+
+	t.Run("search by email", func(t *testing.T) {
+		users, err := store.Search(ctx, "bob@example", 10, 0)
+		require.NoError(t, err)
+		assert.Len(t, users, 1)
+		assert.Equal(t, "bob", users[0].Username)
+	})
+
+	t.Run("search returns no results", func(t *testing.T) {
+		users, err := store.Search(ctx, "nonexistent", 10, 0)
+		require.NoError(t, err)
+		assert.Empty(t, users)
+	})
+
+	t.Run("search excludes inactive users", func(t *testing.T) {
+		inactiveUser := createTestUser("inactive-search@example.com", "inactive-search", "password123")
+		require.NoError(t, store.Create(ctx, inactiveUser))
+		require.NoError(t, store.Delete(ctx, inactiveUser.ID))
+
+		users, err := store.Search(ctx, "inactive-search", 10, 0)
+		require.NoError(t, err)
+		assert.Empty(t, users)
+	})
+}
+
 func TestMySQLStore_List(t *testing.T) {
 	_, store := setupTestStore(t)
 	ctx := context.Background()
