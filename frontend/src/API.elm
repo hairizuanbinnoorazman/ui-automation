@@ -398,3 +398,96 @@ uploadStepAsset runId stepIndex file toMsg =
                 ]
         , expect = Http.expectJson toMsg testRunAssetDecoder
         }
+
+
+
+-- Endpoints
+
+
+getEndpoints : Int -> Int -> (Result Http.Error (PaginatedResponse Endpoint) -> msg) -> Cmd msg
+getEndpoints limit offset toMsg =
+    Http.get
+        { url = baseUrl ++ "/endpoints?limit=" ++ String.fromInt limit ++ "&offset=" ++ String.fromInt offset
+        , expect = Http.expectJson toMsg (paginatedDecoder endpointDecoder)
+        }
+
+
+getEndpoint : String -> (Result Http.Error Endpoint -> msg) -> Cmd msg
+getEndpoint id toMsg =
+    Http.get
+        { url = baseUrl ++ "/endpoints/" ++ id
+        , expect = Http.expectJson toMsg endpointDecoder
+        }
+
+
+createEndpoint : EndpointInput -> (Result Http.Error Endpoint -> msg) -> Cmd msg
+createEndpoint input toMsg =
+    Http.post
+        { url = baseUrl ++ "/endpoints"
+        , body = Http.jsonBody (endpointInputEncoder input)
+        , expect = Http.expectJson toMsg endpointDecoder
+        }
+
+
+updateEndpoint : String -> EndpointInput -> (Result Http.Error Endpoint -> msg) -> Cmd msg
+updateEndpoint id input toMsg =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = baseUrl ++ "/endpoints/" ++ id
+        , body = Http.jsonBody (endpointInputEncoder input)
+        , expect = Http.expectJson toMsg endpointDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+deleteEndpoint : String -> (Result Http.Error () -> msg) -> Cmd msg
+deleteEndpoint id toMsg =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = baseUrl ++ "/endpoints/" ++ id
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+
+-- Jobs
+
+
+getJobs : Int -> Int -> (Result Http.Error (PaginatedResponse Job) -> msg) -> Cmd msg
+getJobs limit offset toMsg =
+    Http.get
+        { url = baseUrl ++ "/jobs?limit=" ++ String.fromInt limit ++ "&offset=" ++ String.fromInt offset
+        , expect = Http.expectJson toMsg (paginatedDecoder jobDecoder)
+        }
+
+
+getJob : String -> (Result Http.Error Job -> msg) -> Cmd msg
+getJob id toMsg =
+    Http.get
+        { url = baseUrl ++ "/jobs/" ++ id
+        , expect = Http.expectJson toMsg jobDecoder
+        }
+
+
+createJob : CreateJobInput -> (Result Http.Error Job -> msg) -> Cmd msg
+createJob input toMsg =
+    Http.post
+        { url = baseUrl ++ "/jobs"
+        , body = Http.jsonBody (createJobInputEncoder input)
+        , expect = Http.expectJson toMsg jobDecoder
+        }
+
+
+stopJob : String -> (Result Http.Error Job -> msg) -> Cmd msg
+stopJob id toMsg =
+    Http.post
+        { url = baseUrl ++ "/jobs/" ++ id ++ "/stop"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg jobDecoder
+        }

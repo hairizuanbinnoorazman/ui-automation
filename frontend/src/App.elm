@@ -7,6 +7,8 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
+import Pages.Endpoints as Endpoints
+import Pages.Jobs as Jobs
 import Pages.Login as Login
 import Pages.ProcedureDetail as ProcedureDetail
 import Pages.Projects as Projects
@@ -53,6 +55,8 @@ type alias Model =
     , procedureDetailModel : Maybe ProcedureDetail.Model
     , testRunsModel : Maybe TestRuns.Model
     , testRunDetailModel : Maybe TestRunDetail.Model
+    , endpointsModel : Maybe Endpoints.Model
+    , jobsModel : Maybe Jobs.Model
     }
 
 
@@ -64,6 +68,8 @@ type Route
     | ProcedureDetail String String
     | TestRuns String
     | TestRunDetail String
+    | Endpoints
+    | Jobs
     | NotFound
 
 
@@ -91,6 +97,8 @@ init _ url key =
       , procedureDetailModel = Nothing
       , testRunsModel = Nothing
       , testRunDetailModel = Nothing
+      , endpointsModel = Nothing
+      , jobsModel = Nothing
       }
     , API.getMe SessionCheckResponse
     )
@@ -113,6 +121,8 @@ type Msg
     | ProcedureDetailMsg ProcedureDetail.Msg
     | TestRunsMsg TestRuns.Msg
     | TestRunDetailMsg TestRunDetail.Msg
+    | EndpointsMsg Endpoints.Msg
+    | JobsMsg Jobs.Msg
     | Logout
     | LogoutResponse (Result Http.Error ())
 
@@ -189,6 +199,34 @@ update msg model =
                             ( { model | testRunDetailModel = Just pm }
                             , Cmd.map TestRunDetailMsg pc
                             )
+
+                        Endpoints ->
+                            case model.endpointsModel of
+                                Just _ ->
+                                    ( model, Cmd.none )
+
+                                Nothing ->
+                                    let
+                                        ( em, ec ) =
+                                            Endpoints.init
+                                    in
+                                    ( { model | endpointsModel = Just em }
+                                    , Cmd.map EndpointsMsg ec
+                                    )
+
+                        Jobs ->
+                            case model.jobsModel of
+                                Just _ ->
+                                    ( model, Cmd.none )
+
+                                Nothing ->
+                                    let
+                                        ( jm, jc ) =
+                                            Jobs.init
+                                    in
+                                    ( { model | jobsModel = Just jm }
+                                    , Cmd.map JobsMsg jc
+                                    )
 
                         _ ->
                             ( model, Cmd.none )
@@ -292,6 +330,30 @@ update msg model =
                                 , testRunDetailModel = Just pm
                               }
                             , Cmd.map TestRunDetailMsg pc
+                            )
+
+                        Endpoints ->
+                            let
+                                ( em, ec ) =
+                                    Endpoints.init
+                            in
+                            ( { model
+                                | user = Just user
+                                , endpointsModel = Just em
+                              }
+                            , Cmd.map EndpointsMsg ec
+                            )
+
+                        Jobs ->
+                            let
+                                ( jm, jc ) =
+                                    Jobs.init
+                            in
+                            ( { model
+                                | user = Just user
+                                , jobsModel = Just jm
+                              }
+                            , Cmd.map JobsMsg jc
                             )
 
                         NotFound ->
@@ -448,6 +510,34 @@ update msg model =
                     in
                     ( { model | testRunDetailModel = Just newModel }
                     , Cmd.map TestRunDetailMsg cmd
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        EndpointsMsg subMsg ->
+            case model.endpointsModel of
+                Just endpointsModel ->
+                    let
+                        ( newModel, cmd ) =
+                            Endpoints.update subMsg endpointsModel
+                    in
+                    ( { model | endpointsModel = Just newModel }
+                    , Cmd.map EndpointsMsg cmd
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        JobsMsg subMsg ->
+            case model.jobsModel of
+                Just jobsModel ->
+                    let
+                        ( newModel, cmd ) =
+                            Jobs.update subMsg jobsModel
+                    in
+                    ( { model | jobsModel = Just newModel }
+                    , Cmd.map JobsMsg cmd
                     )
 
                 Nothing ->
@@ -670,6 +760,16 @@ viewDrawer model =
                     , Html.Attributes.class "mdc-list-item"
                     ]
                     [ Html.text "Projects" ]
+                , Html.a
+                    [ Html.Attributes.href "/endpoints"
+                    , Html.Attributes.class "mdc-list-item"
+                    ]
+                    [ Html.text "Endpoints" ]
+                , Html.a
+                    [ Html.Attributes.href "/jobs"
+                    , Html.Attributes.class "mdc-list-item"
+                    ]
+                    [ Html.text "Jobs" ]
                 ]
             ]
 
@@ -766,6 +866,32 @@ viewContent model =
                         Nothing ->
                             Html.map LoginMsg (Login.view model.loginModel)
 
+                Endpoints ->
+                    case model.user of
+                        Just _ ->
+                            case model.endpointsModel of
+                                Just endpointsModel ->
+                                    Html.map EndpointsMsg (Endpoints.view endpointsModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
+                Jobs ->
+                    case model.user of
+                        Just _ ->
+                            case model.jobsModel of
+                                Just jobsModel ->
+                                    Html.map JobsMsg (Jobs.view jobsModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
                 NotFound ->
                     Html.div []
                         [ Html.h1 [] [ Html.text "404 Not Found" ]
@@ -797,4 +923,6 @@ routeParser =
         , Parser.map TestProcedures (Parser.s "projects" </> Parser.string </> Parser.s "procedures")
         , Parser.map TestRuns (Parser.s "procedures" </> Parser.string </> Parser.s "runs")
         , Parser.map TestRunDetail (Parser.s "runs" </> Parser.string)
+        , Parser.map Endpoints (Parser.s "endpoints")
+        , Parser.map Jobs (Parser.s "jobs")
         ]

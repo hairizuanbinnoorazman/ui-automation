@@ -17,4 +17,6 @@ markers = [
     "runs: test run lifecycle tests",
     "assets: asset upload/download tests",
     "flow: end-to-end flow tests",
+    "endpoints: endpoint CRUD tests",
+    "jobs: job management tests",
 ]

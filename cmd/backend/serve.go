@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/hairizuan-noorazman/ui-automation/agent"
 	"github.com/hairizuan-noorazman/ui-automation/cmd/backend/handlers"
 	"github.com/hairizuan-noorazman/ui-automation/database"
+	"github.com/hairizuan-noorazman/ui-automation/endpoint"
+	"github.com/hairizuan-noorazman/ui-automation/job"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
 	"github.com/hairizuan-noorazman/ui-automation/project"
 	"github.com/hairizuan-noorazman/ui-automation/session"
@@ -110,6 +113,18 @@ func runServer(cmd *cobra.Command, args []string) error {
 	testRunStore := testrun.NewMySQLStore(db, log)
 	assetStore := testrun.NewMySQLAssetStore(db, log)
 	stepNoteStore := testrun.NewMySQLStepNoteStore(db, log)
+	endpointStore := endpoint.NewMySQLStore(db, log)
+	jobStore := job.NewMySQLStore(db, log)
+
+	// Initialize agent pipeline
+	agentCfg := agent.Config{
+		MaxIterations:    cfg.Agent.MaxIterations,
+		TimeLimit:        cfg.Agent.TimeLimit,
+		BedrockRegion:    cfg.Agent.BedrockRegion,
+		BedrockModel:     cfg.Agent.BedrockModel,
+		PlaywrightMCPURL: cfg.Agent.PlaywrightMCPURL,
+	}
+	agentPipeline := agent.NewPipeline(agentCfg, jobStore, endpointStore, testProcedureStore, blobStorage, log)
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -231,6 +246,24 @@ func runServer(cmd *cobra.Command, args []string) error {
 	// Step notes
 	apiRouter.HandleFunc("/runs/{run_id}/steps/notes", testRunHandler.GetStepNotes).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/steps/{step_index}/notes", testRunHandler.SetStepNote).Methods("PUT")
+
+	// Endpoint routes (protected)
+	endpointHandler := handlers.NewEndpointHandler(endpointStore, log)
+	apiRouter.HandleFunc("/endpoints", endpointHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/endpoints", endpointHandler.Create).Methods("POST")
+	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.Update).Methods("PUT")
+	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.Delete).Methods("DELETE")
+
+	// Job routes (protected)
+	jobHandler := handlers.NewJobHandler(jobStore, endpointStore, projectStore, log)
+	apiRouter.HandleFunc("/jobs", jobHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/jobs", jobHandler.Create).Methods("POST")
+	apiRouter.HandleFunc("/jobs/{id}", jobHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/jobs/{id}/stop", jobHandler.Stop).Methods("POST")
+
+	// Store the agent pipeline reference for job handler to use
+	_ = agentPipeline // Pipeline will be integrated with job creation in a future iteration
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

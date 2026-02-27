@@ -218,3 +218,57 @@ class UIAutomationClient:
 
     def unassign_run(self, run_id: str) -> dict:
         return self._request("PUT", f"/runs/{run_id}", json={"assigned_to": ""})
+
+    # --- Endpoints ---
+
+    def create_endpoint(
+        self,
+        name: str,
+        url: str,
+        credentials: list[dict] | None = None,
+    ) -> dict:
+        payload: dict = {"name": name, "url": url}
+        if credentials is not None:
+            payload["credentials"] = credentials
+        return self._request("POST", "/endpoints", json=payload)
+
+    def list_endpoints(self, limit: int = 20, offset: int = 0) -> dict:
+        return self._request(
+            "GET", "/endpoints",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def get_endpoint(self, endpoint_id: str) -> dict:
+        return self._request("GET", f"/endpoints/{endpoint_id}")
+
+    def update_endpoint(self, endpoint_id: str, **fields) -> dict:
+        return self._request(
+            "PUT", f"/endpoints/{endpoint_id}", json=fields,
+        )
+
+    def delete_endpoint(self, endpoint_id: str) -> dict:
+        return self._request("DELETE", f"/endpoints/{endpoint_id}")
+
+    # --- Jobs ---
+
+    def create_job(
+        self,
+        job_type: str,
+        config: dict | None = None,
+    ) -> dict:
+        payload: dict = {"type": job_type}
+        if config is not None:
+            payload["config"] = config
+        return self._request("POST", "/jobs", json=payload)
+
+    def list_jobs(self, limit: int = 20, offset: int = 0) -> dict:
+        return self._request(
+            "GET", "/jobs",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def get_job(self, job_id: str) -> dict:
+        return self._request("GET", f"/jobs/{job_id}")
+
+    def stop_job(self, job_id: str) -> dict:
+        return self._request("POST", f"/jobs/{job_id}/stop")
