@@ -204,10 +204,15 @@ class TestJobStatusTransition:
         )
         assert job["status"] == "created"
 
-        # Wait briefly for the pipeline goroutine to pick up the job
-        time.sleep(2)
+        # Poll until the worker pool picks up the job and transitions it
+        deadline = time.time() + 10
+        updated = job
+        while time.time() < deadline:
+            updated = authenticated_client.get_job(job["id"])
+            if updated["status"] != "created":
+                break
+            time.sleep(0.2)
 
-        updated = authenticated_client.get_job(job["id"])
         # The job should have transitioned away from "created".
         # It will be "running" if agent deps are available, or "failed"
         # if the Python script / Bedrock credentials are missing.

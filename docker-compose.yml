@@ -63,6 +63,7 @@ services:
       - AGENT_BEDROCK_MODEL=anthropic.claude-sonnet-4-6
       - AGENT_BEDROCK_ACCESS_KEY=${AWS_ACCESS_KEY_ID:-}
       - AGENT_BEDROCK_SECRET_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AGENT_MAX_CONCURRENT_WORKERS=1
       - AGENT_SCRIPT_PATH=/root/agent/agent_runner.py
       - CLAUDE_CODE_USE_BEDROCK=1
       - AWS_REGION=${AWS_REGION:-us-east-1}

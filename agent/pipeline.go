@@ -49,7 +49,18 @@ func NewPipeline(
 }
 
 // Run executes the full exploration pipeline for a given job.
+// It marks the job as running before executing.
 func (p *Pipeline) Run(ctx context.Context, jobID uuid.UUID) {
+	p.run(ctx, jobID, true)
+}
+
+// RunAfterClaim executes the pipeline for a job that has already been claimed
+// (already transitioned to running by ClaimNextCreated).
+func (p *Pipeline) RunAfterClaim(ctx context.Context, jobID uuid.UUID) {
+	p.run(ctx, jobID, false)
+}
+
+func (p *Pipeline) run(ctx context.Context, jobID uuid.UUID, needsStart bool) {
 	p.logger.Info(ctx, "starting agent pipeline", map[string]interface{}{
 		"job_id": jobID.String(),
 	})
@@ -101,10 +112,12 @@ func (p *Pipeline) Run(ctx context.Context, jobID uuid.UUID) {
 		return
 	}
 
-	// 3. Mark job as running
-	if err := p.jobStore.Start(ctx, jobID); err != nil {
-		p.failJob(ctx, jobID, fmt.Sprintf("failed to start job: %v", err))
-		return
+	// 3. Mark job as running (skip if already claimed)
+	if needsStart {
+		if err := p.jobStore.Start(ctx, jobID); err != nil {
+			p.failJob(ctx, jobID, fmt.Sprintf("failed to start job: %v", err))
+			return
+		}
 	}
 
 	// 4. Create temp directory for this job

@@ -10,14 +10,15 @@ import (
 
 // AgentConfig holds agent pipeline configuration.
 type AgentConfig struct {
-	MaxIterations    int
-	TimeLimit        time.Duration
-	BedrockRegion    string
-	BedrockModel     string
-	BedrockAccessKey string
-	BedrockSecretKey string
-	PlaywrightMCPURL string
-	AgentScriptPath  string
+	MaxIterations       int
+	TimeLimit           time.Duration
+	BedrockRegion       string
+	BedrockModel        string
+	BedrockAccessKey    string
+	BedrockSecretKey    string
+	PlaywrightMCPURL    string
+	AgentScriptPath     string
+	MaxConcurrentWorkers int
 }
 
 // Config holds all application configuration.
@@ -124,6 +125,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("agent.bedrock_secret_key", "")
 	v.SetDefault("agent.playwright_mcp_url", "http://localhost:3000")
 	v.SetDefault("agent.script_path", "/app/agent/agent_runner.py")
+	v.SetDefault("agent.max_concurrent_workers", 1)
 
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
@@ -170,6 +172,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Agent.BedrockSecretKey = v.GetString("agent.bedrock_secret_key")
 	config.Agent.PlaywrightMCPURL = v.GetString("agent.playwright_mcp_url")
 	config.Agent.AgentScriptPath = v.GetString("agent.script_path")
+	config.Agent.MaxConcurrentWorkers = v.GetInt("agent.max_concurrent_workers")
 
 	return &config, nil
 }

@@ -194,6 +194,51 @@ func (s *MySQLStore) Start(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ClaimNextCreated atomically finds the oldest created job and transitions it to running.
+// Returns nil, nil if no created jobs are available.
+func (s *MySQLStore) ClaimNextCreated(ctx context.Context) (*Job, error) {
+	var claimed *Job
+
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var j Job
+		err := tx.Raw("SELECT * FROM jobs WHERE status = ? ORDER BY created_at ASC LIMIT 1 FOR UPDATE", StatusCreated).
+			Scan(&j).Error
+		if err != nil {
+			return err
+		}
+		if j.ID == (uuid.UUID{}) {
+			// No created jobs available
+			return nil
+		}
+
+		if err := j.Start(); err != nil {
+			return err
+		}
+
+		if err := tx.Save(&j).Error; err != nil {
+			return err
+		}
+
+		claimed = &j
+		return nil
+	})
+
+	if err != nil {
+		s.logger.Error(ctx, "failed to claim next created job", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, err
+	}
+
+	if claimed != nil {
+		s.logger.Info(ctx, "claimed job", map[string]interface{}{
+			"job_id": claimed.ID.String(),
+		})
+	}
+
+	return claimed, nil
+}
+
 // Complete marks a job as finished with the given status and result.
 func (s *MySQLStore) Complete(ctx context.Context, id uuid.UUID, status Status, result JSONMap) error {
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

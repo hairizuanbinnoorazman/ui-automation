@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -19,16 +18,18 @@ type JobHandler struct {
 	jobStore      job.Store
 	endpointStore endpoint.Store
 	projectStore  project.Store
+	workerPool    *agent.WorkerPool
 	pipeline      *agent.Pipeline
 	logger        logger.Logger
 }
 
 // NewJobHandler creates a new job handler.
-func NewJobHandler(jobStore job.Store, endpointStore endpoint.Store, projectStore project.Store, pipeline *agent.Pipeline, log logger.Logger) *JobHandler {
+func NewJobHandler(jobStore job.Store, endpointStore endpoint.Store, projectStore project.Store, pool *agent.WorkerPool, pipeline *agent.Pipeline, log logger.Logger) *JobHandler {
 	return &JobHandler{
 		jobStore:      jobStore,
 		endpointStore: endpointStore,
 		projectStore:  projectStore,
+		workerPool:    pool,
 		pipeline:      pipeline,
 		logger:        log,
 	}
@@ -174,9 +175,13 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Launch agent pipeline asynchronously for ui_exploration jobs
-	if jobType == job.JobTypeUIExploration && h.pipeline != nil {
-		go h.pipeline.Run(context.Background(), j.ID)
+	// Notify worker pool that a new job is available
+	if jobType == job.JobTypeUIExploration && h.workerPool != nil {
+		select {
+		case h.workerPool.Work <- struct{}{}:
+		default:
+			// All workers busy; job stays in DB as 'created' until a worker is free
+		}
 	}
 
 	respondJSON(w, http.StatusCreated, j)

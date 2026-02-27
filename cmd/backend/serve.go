@@ -118,16 +118,23 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	// Initialize agent pipeline
 	agentCfg := agent.Config{
-		MaxIterations:    cfg.Agent.MaxIterations,
-		TimeLimit:        cfg.Agent.TimeLimit,
-		BedrockRegion:    cfg.Agent.BedrockRegion,
-		BedrockModel:     cfg.Agent.BedrockModel,
-		BedrockAccessKey: cfg.Agent.BedrockAccessKey,
-		BedrockSecretKey: cfg.Agent.BedrockSecretKey,
-		PlaywrightMCPURL: cfg.Agent.PlaywrightMCPURL,
-		AgentScriptPath:  cfg.Agent.AgentScriptPath,
+		MaxIterations:       cfg.Agent.MaxIterations,
+		TimeLimit:           cfg.Agent.TimeLimit,
+		BedrockRegion:       cfg.Agent.BedrockRegion,
+		BedrockModel:        cfg.Agent.BedrockModel,
+		BedrockAccessKey:    cfg.Agent.BedrockAccessKey,
+		BedrockSecretKey:    cfg.Agent.BedrockSecretKey,
+		PlaywrightMCPURL:    cfg.Agent.PlaywrightMCPURL,
+		AgentScriptPath:     cfg.Agent.AgentScriptPath,
+		MaxConcurrentWorkers: cfg.Agent.MaxConcurrentWorkers,
 	}
 	agentPipeline := agent.NewPipeline(agentCfg, jobStore, endpointStore, testProcedureStore, blobStorage, log)
+
+	// Initialize and start worker pool
+	workerPool := agent.NewWorkerPool(agentCfg.MaxConcurrentWorkers, jobStore, agentPipeline, log)
+	poolCtx, poolCancel := context.WithCancel(ctx)
+	defer poolCancel()
+	workerPool.Start(poolCtx)
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -259,7 +266,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.Delete).Methods("DELETE")
 
 	// Job routes (protected)
-	jobHandler := handlers.NewJobHandler(jobStore, endpointStore, projectStore, agentPipeline, log)
+	jobHandler := handlers.NewJobHandler(jobStore, endpointStore, projectStore, workerPool, agentPipeline, log)
 	apiRouter.HandleFunc("/jobs", jobHandler.List).Methods("GET")
 	apiRouter.HandleFunc("/jobs", jobHandler.Create).Methods("POST")
 	apiRouter.HandleFunc("/jobs/{id}", jobHandler.GetByID).Methods("GET")
@@ -292,6 +299,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	<-quit
 
 	log.Info(ctx, "shutting down server", nil)
+
+	// Stop worker pool
+	poolCancel()
 
 	// Graceful shutdown with timeout
 	shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)

@@ -15,6 +15,7 @@ type Store interface {
 	ListByType(ctx context.Context, jobType JobType, limit, offset int) ([]*Job, error)
 	Start(ctx context.Context, id uuid.UUID) error
 	Complete(ctx context.Context, id uuid.UUID, status Status, result JSONMap) error
+	ClaimNextCreated(ctx context.Context) (*Job, error)
 }
 
 type UpdateSetter func(*Job) error
