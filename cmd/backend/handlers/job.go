@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/hairizuan-noorazman/ui-automation/agent"
 	"github.com/hairizuan-noorazman/ui-automation/endpoint"
 	"github.com/hairizuan-noorazman/ui-automation/job"
 	"github.com/hairizuan-noorazman/ui-automation/logger"
@@ -17,15 +19,17 @@ type JobHandler struct {
 	jobStore      job.Store
 	endpointStore endpoint.Store
 	projectStore  project.Store
+	pipeline      *agent.Pipeline
 	logger        logger.Logger
 }
 
 // NewJobHandler creates a new job handler.
-func NewJobHandler(jobStore job.Store, endpointStore endpoint.Store, projectStore project.Store, log logger.Logger) *JobHandler {
+func NewJobHandler(jobStore job.Store, endpointStore endpoint.Store, projectStore project.Store, pipeline *agent.Pipeline, log logger.Logger) *JobHandler {
 	return &JobHandler{
 		jobStore:      jobStore,
 		endpointStore: endpointStore,
 		projectStore:  projectStore,
+		pipeline:      pipeline,
 		logger:        log,
 	}
 }
@@ -170,6 +174,11 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Launch agent pipeline asynchronously for ui_exploration jobs
+	if jobType == job.JobTypeUIExploration && h.pipeline != nil {
+		go h.pipeline.Run(context.Background(), j.ID)
+	}
+
 	respondJSON(w, http.StatusCreated, j)
 }
 
@@ -276,6 +285,11 @@ func (h *JobHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	if j.Status != job.StatusRunning {
 		respondError(w, http.StatusBadRequest, "job is not running")
 		return
+	}
+
+	// Cancel the agent subprocess if running
+	if h.pipeline != nil {
+		h.pipeline.Stop(id)
 	}
 
 	result := job.JSONMap{"reason": "stopped by user"}

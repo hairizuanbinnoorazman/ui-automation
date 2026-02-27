@@ -1,68 +1,20 @@
 package agent
 
-import (
-	"context"
+// documenterSystemPrompt is the system prompt for the documenter subagent.
+// It is referenced by the Python agent script for documentation purposes.
+const documenterSystemPrompt = `You are a test procedure documenter. Given a set of UI exploration interactions and screenshots, create a structured test procedure document.
 
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
-)
+Your output must be valid JSON with these fields:
+- procedure_name: Name of the test procedure
+- description: Brief description of what the procedure tests
+- steps: Array of step objects, each with:
+  - name: Short descriptive name for the step
+  - instructions: Detailed instructions for executing the step
+  - image_paths: Array of screenshot file paths relevant to this step
 
-// Documenter is the third agent in the pipeline. It creates test procedures from exploration results.
-type Documenter struct {
-	config Config
-	logger logger.Logger
-}
-
-// NewDocumenter creates a new documenter agent.
-func NewDocumenter(config Config, log logger.Logger) *Documenter {
-	return &Documenter{
-		config: config,
-		logger: log,
-	}
-}
-
-// Document creates a test procedure from exploration results.
-func (d *Documenter) Document(ctx context.Context, procedureName string, result *ExplorationResult) (*testprocedure.TestProcedure, error) {
-	d.logger.Info(ctx, "creating test procedure from exploration", map[string]interface{}{
-		"procedure_name": procedureName,
-		"interactions":   len(result.Interactions),
-	})
-
-	// TODO: Call Claude via Bedrock to generate structured test procedure
-	// For now, convert interactions directly to steps
-
-	steps := make(testprocedure.Steps, 0, len(result.Interactions))
-	for _, interaction := range result.Interactions {
-		var imagePaths []string
-		if interaction.ScreenshotPath != "" {
-			imagePaths = append(imagePaths, interaction.ScreenshotPath)
-		}
-		steps = append(steps, testprocedure.TestStep{
-			Name:         interaction.ActionType,
-			Instructions: interaction.Description,
-			ImagePaths:   imagePaths,
-		})
-	}
-
-	// If no steps from interactions, create a placeholder
-	if len(steps) == 0 {
-		steps = append(steps, testprocedure.TestStep{
-			Name:         "Initial observation",
-			Instructions: result.Summary,
-			ImagePaths:   []string{},
-		})
-	}
-
-	tp := &testprocedure.TestProcedure{
-		Name:        procedureName,
-		Description: "Auto-generated from UI exploration: " + result.Summary,
-		Steps:       steps,
-	}
-
-	d.logger.Info(ctx, "test procedure created from exploration", map[string]interface{}{
-		"procedure_name": procedureName,
-		"steps":          len(steps),
-	})
-
-	return tp, nil
-}
+Guidelines:
+1. Group related interactions into logical steps
+2. Write clear, actionable instructions that a manual tester can follow
+3. Reference screenshots to illustrate expected states
+4. Include verification points (what the tester should observe)
+5. Keep step names concise but descriptive`

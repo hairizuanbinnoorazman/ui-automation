@@ -10,5 +10,8 @@ type Config struct {
 	TimeLimit        time.Duration
 	BedrockRegion    string
 	BedrockModel     string
+	BedrockAccessKey string
+	BedrockSecretKey string
 	PlaywrightMCPURL string
+	AgentScriptPath  string
 }

@@ -19,4 +19,5 @@ markers = [
     "flow: end-to-end flow tests",
     "endpoints: endpoint CRUD tests",
     "jobs: job management tests",
+    "agent: agent pipeline tests (requires Bedrock credentials)",
 ]

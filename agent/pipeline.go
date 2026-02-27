@@ -1,8 +1,14 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/hairizuan-noorazman/ui-automation/endpoint"
@@ -12,7 +18,7 @@ import (
 	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
 )
 
-// Pipeline orchestrates the three-agent exploration pipeline.
+// Pipeline orchestrates UI exploration by spawning a Python agent subprocess.
 type Pipeline struct {
 	config             Config
 	jobStore           job.Store
@@ -20,6 +26,7 @@ type Pipeline struct {
 	testProcedureStore testprocedure.Store
 	storage            storage.BlobStorage
 	logger             logger.Logger
+	cancelFuncs        sync.Map // map[uuid.UUID]context.CancelFunc
 }
 
 // NewPipeline creates a new agent pipeline.
@@ -47,9 +54,11 @@ func (p *Pipeline) Run(ctx context.Context, jobID uuid.UUID) {
 		"job_id": jobID.String(),
 	})
 
-	// Create context with timeout
+	// Create context with timeout and store cancel func
 	ctx, cancel := context.WithTimeout(ctx, p.config.TimeLimit)
 	defer cancel()
+	p.cancelFuncs.Store(jobID, cancel)
+	defer p.cancelFuncs.Delete(jobID)
 
 	// 1. Fetch job and parse config
 	j, err := p.jobStore.GetByID(ctx, jobID)
@@ -98,47 +107,144 @@ func (p *Pipeline) Run(ctx context.Context, jobID uuid.UUID) {
 		return
 	}
 
-	// 4. Connect MCP bridge
-	bridge := NewMCPBridge(p.config.PlaywrightMCPURL, p.logger)
-	if err := bridge.Connect(ctx); err != nil {
-		p.failJob(ctx, jobID, fmt.Sprintf("failed to connect to Playwright MCP: %v", err))
+	// 4. Create temp directory for this job
+	tmpDir := filepath.Join(os.TempDir(), fmt.Sprintf("agent-job-%s", jobID.String()))
+	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
+		p.failJob(ctx, jobID, fmt.Sprintf("failed to create temp directory: %v", err))
 		return
 	}
-	defer bridge.Close()
+	defer os.RemoveAll(tmpDir)
 
-	// 5. Convert endpoint credentials
+	// 5. Build agent config
 	creds := make([]Credential, len(ep.Credentials))
 	for i, c := range ep.Credentials {
 		creds[i] = Credential{Key: c.Key, Value: c.Value}
 	}
 
-	// 6. Run planner agent
-	planner := NewPlanner(p.config, p.logger)
-	plan, err := planner.Plan(ctx, ep.URL, creds)
+	agentCfg := AgentConfig{
+		TargetURL:        ep.URL,
+		Credentials:      creds,
+		ProcedureName:    procedureName,
+		JobID:            jobID.String(),
+		OutputDir:        tmpDir,
+		PlaywrightMCPURL: p.config.PlaywrightMCPURL + "/sse",
+	}
+
+	configJSON, err := json.Marshal(agentCfg)
 	if err != nil {
-		p.failJob(ctx, jobID, fmt.Sprintf("planner failed: %v", err))
+		p.failJob(ctx, jobID, fmt.Sprintf("failed to marshal agent config: %v", err))
 		return
 	}
 
-	// 7. Run explorer agent
-	explorer := NewExplorer(p.config, bridge, p.storage, p.logger)
-	result, err := explorer.Explore(ctx, jobID.String(), plan)
-	if err != nil {
-		p.failJob(ctx, jobID, fmt.Sprintf("explorer failed: %v", err))
+	// 6. Spawn Python agent subprocess
+	p.logger.Info(ctx, "spawning agent subprocess", map[string]interface{}{
+		"job_id":      jobID.String(),
+		"script_path": p.config.AgentScriptPath,
+		"target_url":  ep.URL,
+	})
+
+	cmd := exec.CommandContext(ctx, "python3", p.config.AgentScriptPath)
+	cmd.Stdin = bytes.NewReader(configJSON)
+
+	// Set environment variables for Bedrock auth
+	cmd.Env = append(os.Environ(),
+		"CLAUDE_CODE_USE_BEDROCK=1",
+		fmt.Sprintf("AWS_REGION=%s", p.config.BedrockRegion),
+	)
+	if p.config.BedrockAccessKey != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", p.config.BedrockAccessKey))
+	}
+	if p.config.BedrockSecretKey != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", p.config.BedrockSecretKey))
+	}
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		p.failJob(ctx, jobID, fmt.Sprintf("agent subprocess failed: %v; stderr: %s", err, stderr.String()))
 		return
 	}
 
-	// 8. Run documenter agent
-	documenter := NewDocumenter(p.config, p.logger)
-	tp, err := documenter.Document(ctx, procedureName, result)
+	// 7. Read result from output file
+	resultPath := filepath.Join(tmpDir, "result.json")
+	resultData, err := os.ReadFile(resultPath)
 	if err != nil {
-		p.failJob(ctx, jobID, fmt.Sprintf("documenter failed: %v", err))
+		p.failJob(ctx, jobID, fmt.Sprintf("failed to read agent result: %v", err))
 		return
+	}
+
+	var agentResult AgentResult
+	if err := json.Unmarshal(resultData, &agentResult); err != nil {
+		p.failJob(ctx, jobID, fmt.Sprintf("failed to parse agent result: %v", err))
+		return
+	}
+
+	// 8. Upload screenshots to storage and build test procedure steps
+	steps := make(testprocedure.Steps, 0, len(agentResult.Steps))
+	for _, step := range agentResult.Steps {
+		storedPaths := make([]string, 0, len(step.ImagePaths))
+		for _, imgPath := range step.ImagePaths {
+			localPath := filepath.Join(tmpDir, imgPath)
+			if _, err := os.Stat(localPath); err != nil {
+				p.logger.Warn(ctx, "screenshot file not found, skipping", map[string]interface{}{
+					"path": localPath,
+				})
+				continue
+			}
+
+			storagePath := fmt.Sprintf("test-procedures/%s/%s", projectID.String(), filepath.Base(imgPath))
+			f, err := os.Open(localPath)
+			if err != nil {
+				p.logger.Warn(ctx, "failed to open screenshot, skipping", map[string]interface{}{
+					"path":  localPath,
+					"error": err.Error(),
+				})
+				continue
+			}
+			if err := p.storage.Upload(ctx, storagePath, f); err != nil {
+				f.Close()
+				p.logger.Warn(ctx, "failed to upload screenshot, skipping", map[string]interface{}{
+					"path":  storagePath,
+					"error": err.Error(),
+				})
+				continue
+			}
+			f.Close()
+
+			url, err := p.storage.GetURL(ctx, storagePath)
+			if err != nil {
+				storedPaths = append(storedPaths, storagePath)
+			} else {
+				storedPaths = append(storedPaths, url)
+			}
+		}
+
+		steps = append(steps, testprocedure.TestStep{
+			Name:         step.Name,
+			Instructions: step.Instructions,
+			ImagePaths:   storedPaths,
+		})
+	}
+
+	// If no steps were generated, create a placeholder
+	if len(steps) == 0 {
+		steps = append(steps, testprocedure.TestStep{
+			Name:         "Initial observation",
+			Instructions: agentResult.Summary,
+			ImagePaths:   []string{},
+		})
 	}
 
 	// 9. Save procedure
-	tp.ProjectID = projectID
-	tp.CreatedBy = j.CreatedBy
+	tp := &testprocedure.TestProcedure{
+		ProjectID:   projectID,
+		Name:        agentResult.ProcedureName,
+		Description: "Auto-generated from UI exploration: " + agentResult.Description,
+		Steps:       steps,
+		CreatedBy:   j.CreatedBy,
+	}
+
 	if err := p.testProcedureStore.Create(ctx, tp); err != nil {
 		p.failJob(ctx, jobID, fmt.Sprintf("failed to save procedure: %v", err))
 		return
@@ -162,6 +268,13 @@ func (p *Pipeline) Run(ctx context.Context, jobID uuid.UUID) {
 	})
 }
 
+// Stop cancels a running job's agent subprocess.
+func (p *Pipeline) Stop(jobID uuid.UUID) {
+	if cancelFn, ok := p.cancelFuncs.Load(jobID); ok {
+		cancelFn.(context.CancelFunc)()
+	}
+}
+
 // failJob marks a job as failed with the given reason.
 func (p *Pipeline) failJob(ctx context.Context, jobID uuid.UUID, reason string) {
 	p.logger.Error(ctx, "agent pipeline failed", map[string]interface{}{
@@ -169,12 +282,14 @@ func (p *Pipeline) failJob(ctx context.Context, jobID uuid.UUID, reason string) 
 		"reason": reason,
 	})
 
-	// Try to mark the job as failed
+	// Truncate long error messages for storage
+	if len(reason) > 1000 {
+		reason = reason[:1000] + "... (truncated)"
+	}
+
 	if err := p.jobStore.Complete(ctx, jobID, job.StatusFailed, job.JSONMap{
 		"error": reason,
 	}); err != nil {
-		// If the job hasn't been started yet, we need a different approach
-		// Update the job status directly
 		if err2 := p.jobStore.Update(ctx, jobID, job.SetStatus(job.StatusFailed), job.SetResult(job.JSONMap{
 			"error": reason,
 		})); err2 != nil {

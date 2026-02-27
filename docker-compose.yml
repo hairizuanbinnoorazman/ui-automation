@@ -59,8 +59,15 @@ services:
       - AGENT_PLAYWRIGHT_MCP_URL=http://playwright-mcp:3000
       - AGENT_MAX_ITERATIONS=50
       - AGENT_TIME_LIMIT=10m
-      - AGENT_BEDROCK_REGION=us-east-1
+      - AGENT_BEDROCK_REGION=${AWS_REGION:-us-east-1}
       - AGENT_BEDROCK_MODEL=anthropic.claude-sonnet-4-6
+      - AGENT_BEDROCK_ACCESS_KEY=${AWS_ACCESS_KEY_ID:-}
+      - AGENT_BEDROCK_SECRET_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AGENT_SCRIPT_PATH=/root/agent/agent_runner.py
+      - CLAUDE_CODE_USE_BEDROCK=1
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
     volumes:
       - uploads_data:/uploads
     depends_on:

@@ -122,7 +122,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 		TimeLimit:        cfg.Agent.TimeLimit,
 		BedrockRegion:    cfg.Agent.BedrockRegion,
 		BedrockModel:     cfg.Agent.BedrockModel,
+		BedrockAccessKey: cfg.Agent.BedrockAccessKey,
+		BedrockSecretKey: cfg.Agent.BedrockSecretKey,
 		PlaywrightMCPURL: cfg.Agent.PlaywrightMCPURL,
+		AgentScriptPath:  cfg.Agent.AgentScriptPath,
 	}
 	agentPipeline := agent.NewPipeline(agentCfg, jobStore, endpointStore, testProcedureStore, blobStorage, log)
 
@@ -256,14 +259,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.Delete).Methods("DELETE")
 
 	// Job routes (protected)
-	jobHandler := handlers.NewJobHandler(jobStore, endpointStore, projectStore, log)
+	jobHandler := handlers.NewJobHandler(jobStore, endpointStore, projectStore, agentPipeline, log)
 	apiRouter.HandleFunc("/jobs", jobHandler.List).Methods("GET")
 	apiRouter.HandleFunc("/jobs", jobHandler.Create).Methods("POST")
 	apiRouter.HandleFunc("/jobs/{id}", jobHandler.GetByID).Methods("GET")
 	apiRouter.HandleFunc("/jobs/{id}/stop", jobHandler.Stop).Methods("POST")
-
-	// Store the agent pipeline reference for job handler to use
-	_ = agentPipeline // Pipeline will be integrated with job creation in a future iteration
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

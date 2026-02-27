@@ -1,29 +1,32 @@
 package agent
 
-// ExplorationPlan is the output of the planner agent.
-type ExplorationPlan struct {
-	TargetURL   string       `json:"target_url"`
-	Strategy    string       `json:"strategy"`
-	PageAreas   []string     `json:"page_areas"`
-	Actions     []string     `json:"actions"`
-	Credentials []Credential `json:"credentials"`
+// AgentConfig is the JSON config sent to the Python agent script via stdin.
+type AgentConfig struct {
+	TargetURL       string       `json:"target_url"`
+	Credentials     []Credential `json:"credentials,omitempty"`
+	ProcedureName   string       `json:"procedure_name"`
+	JobID           string       `json:"job_id"`
+	OutputDir       string       `json:"output_dir"`
+	PlaywrightMCPURL string      `json:"playwright_mcp_url"`
 }
 
+// Credential holds a key-value pair for endpoint credentials.
 type Credential struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-// Interaction represents a single browser interaction during exploration.
-type Interaction struct {
-	StepNumber     int    `json:"step_number"`
-	ActionType     string `json:"action_type"`
-	Description    string `json:"description"`
-	ScreenshotPath string `json:"screenshot_path,omitempty"`
+// AgentResult is the JSON result produced by the Python agent script.
+type AgentResult struct {
+	ProcedureName string      `json:"procedure_name"`
+	Description   string      `json:"description"`
+	Steps         []AgentStep `json:"steps"`
+	Summary       string      `json:"summary"`
 }
 
-// ExplorationResult is the output of the explorer agent.
-type ExplorationResult struct {
-	Interactions []Interaction `json:"interactions"`
-	Summary      string        `json:"summary"`
+// AgentStep represents a single step in the agent-generated test procedure.
+type AgentStep struct {
+	Name         string   `json:"name"`
+	Instructions string   `json:"instructions"`
+	ImagePaths   []string `json:"image_paths"`
 }

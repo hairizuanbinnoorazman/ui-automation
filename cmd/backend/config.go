@@ -14,7 +14,10 @@ type AgentConfig struct {
 	TimeLimit        time.Duration
 	BedrockRegion    string
 	BedrockModel     string
+	BedrockAccessKey string
+	BedrockSecretKey string
 	PlaywrightMCPURL string
+	AgentScriptPath  string
 }
 
 // Config holds all application configuration.
@@ -117,7 +120,10 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("agent.time_limit", "10m")
 	v.SetDefault("agent.bedrock_region", "us-east-1")
 	v.SetDefault("agent.bedrock_model", "anthropic.claude-sonnet-4-6")
+	v.SetDefault("agent.bedrock_access_key", "")
+	v.SetDefault("agent.bedrock_secret_key", "")
 	v.SetDefault("agent.playwright_mcp_url", "http://localhost:3000")
+	v.SetDefault("agent.script_path", "/app/agent/agent_runner.py")
 
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
@@ -160,7 +166,10 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Agent.TimeLimit = v.GetDuration("agent.time_limit")
 	config.Agent.BedrockRegion = v.GetString("agent.bedrock_region")
 	config.Agent.BedrockModel = v.GetString("agent.bedrock_model")
+	config.Agent.BedrockAccessKey = v.GetString("agent.bedrock_access_key")
+	config.Agent.BedrockSecretKey = v.GetString("agent.bedrock_secret_key")
 	config.Agent.PlaywrightMCPURL = v.GetString("agent.playwright_mcp_url")
+	config.Agent.AgentScriptPath = v.GetString("agent.script_path")
 
 	return &config, nil
 }

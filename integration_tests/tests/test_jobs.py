@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from client import APIError, UIAutomationClient
@@ -180,6 +182,36 @@ class TestStopJob:
         with pytest.raises(APIError) as exc_info:
             authenticated_client.stop_job(job["id"])
         assert exc_info.value.status_code == 400
+
+
+class TestJobStatusTransition:
+    def test_job_transitions_to_running_after_creation(
+        self,
+        authenticated_client: UIAutomationClient,
+        project_for_jobs: dict,
+        endpoint_for_jobs: dict,
+    ):
+        """After creating a ui_exploration job, it should transition from
+        'created' to 'running' (or 'failed' if agent dependencies are missing).
+        This verifies the pipeline goroutine is triggered."""
+        job = authenticated_client.create_job(
+            job_type="ui_exploration",
+            config={
+                "endpoint_id": endpoint_for_jobs["id"],
+                "project_id": project_for_jobs["id"],
+                "procedure_name": "Status Transition Test",
+            },
+        )
+        assert job["status"] == "created"
+
+        # Wait briefly for the pipeline goroutine to pick up the job
+        time.sleep(2)
+
+        updated = authenticated_client.get_job(job["id"])
+        # The job should have transitioned away from "created".
+        # It will be "running" if agent deps are available, or "failed"
+        # if the Python script / Bedrock credentials are missing.
+        assert updated["status"] in ("running", "failed", "success")
 
 
 class TestJobOwnership:

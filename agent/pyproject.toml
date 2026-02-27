@@ -1,0 +1,9 @@
+[project]
+name = "ui-automation-agent"
+version = "0.1.0"
+description = "UI exploration agent using Claude Agent SDK"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk",
+    "anyio",
+]
