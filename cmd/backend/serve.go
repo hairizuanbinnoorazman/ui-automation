@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/hairizuanbinnoorazman/ui-automation/agent"
+	"github.com/hairizuanbinnoorazman/ui-automation/apitoken"
 	"github.com/hairizuanbinnoorazman/ui-automation/cmd/backend/handlers"
 	"github.com/hairizuanbinnoorazman/ui-automation/database"
 	"github.com/hairizuanbinnoorazman/ui-automation/endpoint"
@@ -115,6 +116,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	stepNoteStore := testrun.NewMySQLStepNoteStore(db, log)
 	endpointStore := endpoint.NewMySQLStore(db, log)
 	jobStore := job.NewMySQLStore(db, log)
+	apiTokenStore := apitoken.NewMySQLStore(db, log)
 
 	// Initialize agent pipeline
 	agentCfg := agent.Config{
@@ -174,10 +176,11 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	// Protected user routes
 	userHandler := handlers.NewUserHandler(userStore, log)
-	authMiddleware := handlers.NewAuthMiddleware(sessionManager, cfg.Session.CookieName, log)
+	authMiddleware := handlers.NewAuthMiddleware(sessionManager, apiTokenStore, cfg.Session.CookieName, log)
 
 	apiRouter := router.PathPrefix("/api/v1").Subrouter()
 	apiRouter.Use(authMiddleware.Handler)
+	apiRouter.Use(handlers.WriteScopeMiddleware)
 
 	// Session validation endpoint (protected by AuthMiddleware)
 	apiRouter.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET")
@@ -271,6 +274,12 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/jobs", jobHandler.Create).Methods("POST")
 	apiRouter.HandleFunc("/jobs/{id}", jobHandler.GetByID).Methods("GET")
 	apiRouter.HandleFunc("/jobs/{id}/stop", jobHandler.Stop).Methods("POST")
+
+	// API Token routes (protected)
+	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenStore, log)
+	apiRouter.HandleFunc("/tokens", apiTokenHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/tokens", apiTokenHandler.Create).Methods("POST")
+	apiRouter.HandleFunc("/tokens/{token_id}", apiTokenHandler.Revoke).Methods("DELETE")
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

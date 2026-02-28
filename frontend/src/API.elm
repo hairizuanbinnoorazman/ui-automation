@@ -491,3 +491,37 @@ stopJob id toMsg =
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg jobDecoder
         }
+
+
+
+-- API Tokens
+
+
+getAPITokens : (Result Http.Error TokenListResponse -> msg) -> Cmd msg
+getAPITokens toMsg =
+    Http.get
+        { url = baseUrl ++ "/tokens"
+        , expect = Http.expectJson toMsg tokenListResponseDecoder
+        }
+
+
+createAPIToken : CreateTokenInput -> (Result Http.Error CreateTokenResponse -> msg) -> Cmd msg
+createAPIToken input toMsg =
+    Http.post
+        { url = baseUrl ++ "/tokens"
+        , body = Http.jsonBody (createTokenInputEncoder input)
+        , expect = Http.expectJson toMsg createTokenResponseDecoder
+        }
+
+
+revokeAPIToken : String -> (Result Http.Error () -> msg) -> Cmd msg
+revokeAPIToken tokenId toMsg =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = baseUrl ++ "/tokens/" ++ tokenId
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
