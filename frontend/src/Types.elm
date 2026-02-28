@@ -133,6 +133,67 @@ type alias CompleteTestRunInput =
 
 
 
+-- Endpoint Types
+
+
+type alias Credential =
+    { key : String
+    , value : String
+    }
+
+
+type alias Endpoint =
+    { id : String
+    , name : String
+    , url : String
+    , credentials : List Credential
+    , createdBy : String
+    , createdAt : Time.Posix
+    , updatedAt : Time.Posix
+    }
+
+
+type alias EndpointInput =
+    { name : String
+    , url : String
+    , credentials : List Credential
+    }
+
+
+
+-- Job Types
+
+
+type JobStatus
+    = JobCreated
+    | JobRunning
+    | JobStopped
+    | JobFailed
+    | JobSuccess
+
+
+type alias Job =
+    { id : String
+    , jobType : String
+    , status : JobStatus
+    , config : Encode.Value
+    , result : Encode.Value
+    , startTime : Maybe Time.Posix
+    , endTime : Maybe Time.Posix
+    , duration : Maybe Int
+    , createdBy : String
+    , createdAt : Time.Posix
+    , updatedAt : Time.Posix
+    }
+
+
+type alias CreateJobInput =
+    { jobType : String
+    , config : Encode.Value
+    }
+
+
+
 -- Test Run Asset Types
 
 
@@ -355,6 +416,75 @@ paginatedDecoder itemDecoder =
         (Decode.field "offset" Decode.int)
 
 
+credentialDecoder : Decoder Credential
+credentialDecoder =
+    Decode.map2 Credential
+        (Decode.field "key" Decode.string)
+        (Decode.field "value" Decode.string)
+
+
+endpointDecoder : Decoder Endpoint
+endpointDecoder =
+    Decode.map7 Endpoint
+        (Decode.field "id" Decode.string)
+        (Decode.field "name" Decode.string)
+        (Decode.field "url" Decode.string)
+        (Decode.field "credentials" (Decode.oneOf [ Decode.list credentialDecoder, Decode.null [] ]))
+        (Decode.field "created_by" Decode.string)
+        (Decode.field "created_at" timeDecoder)
+        (Decode.field "updated_at" timeDecoder)
+
+
+jobStatusDecoder : Decoder JobStatus
+jobStatusDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "created" ->
+                        Decode.succeed JobCreated
+
+                    "running" ->
+                        Decode.succeed JobRunning
+
+                    "stopped" ->
+                        Decode.succeed JobStopped
+
+                    "failed" ->
+                        Decode.succeed JobFailed
+
+                    "success" ->
+                        Decode.succeed JobSuccess
+
+                    _ ->
+                        Decode.fail ("Unknown job status: " ++ str)
+            )
+
+
+jobDecoder : Decoder Job
+jobDecoder =
+    Decode.map8
+        (\id jobType status config result startTime endTime createdBy ->
+            \duration createdAt updatedAt ->
+                Job id jobType status config result startTime endTime duration createdBy createdAt updatedAt
+        )
+        (Decode.field "id" Decode.string)
+        (Decode.field "type" Decode.string)
+        (Decode.field "status" jobStatusDecoder)
+        (Decode.field "config" Decode.value)
+        (Decode.field "result" Decode.value)
+        (Decode.maybe (Decode.field "start_time" timeDecoder))
+        (Decode.maybe (Decode.field "end_time" timeDecoder))
+        (Decode.field "created_by" Decode.string)
+        |> Decode.andThen
+            (\fn ->
+                Decode.map3 fn
+                    (Decode.maybe (Decode.field "duration" Decode.int))
+                    (Decode.field "created_at" timeDecoder)
+                    (Decode.field "updated_at" timeDecoder)
+            )
+
+
 timeDecoder : Decoder Time.Posix
 timeDecoder =
     Iso8601.decoder
@@ -448,3 +578,47 @@ assetTypeToString assetType =
 
         Document ->
             "document"
+
+
+credentialEncoder : Credential -> Encode.Value
+credentialEncoder cred =
+    Encode.object
+        [ ( "key", Encode.string cred.key )
+        , ( "value", Encode.string cred.value )
+        ]
+
+
+endpointInputEncoder : EndpointInput -> Encode.Value
+endpointInputEncoder input =
+    Encode.object
+        [ ( "name", Encode.string input.name )
+        , ( "url", Encode.string input.url )
+        , ( "credentials", Encode.list credentialEncoder input.credentials )
+        ]
+
+
+createJobInputEncoder : CreateJobInput -> Encode.Value
+createJobInputEncoder input =
+    Encode.object
+        [ ( "type", Encode.string input.jobType )
+        , ( "config", input.config )
+        ]
+
+
+jobStatusToString : JobStatus -> String
+jobStatusToString status =
+    case status of
+        JobCreated ->
+            "created"
+
+        JobRunning ->
+            "running"
+
+        JobStopped ->
+            "stopped"
+
+        JobFailed ->
+            "failed"
+
+        JobSuccess ->
+            "success"

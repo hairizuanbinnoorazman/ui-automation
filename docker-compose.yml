@@ -20,6 +20,21 @@ services:
     networks:
       - ui-automation-network
 
+  # Playwright MCP sidecar for browser automation
+  playwright-mcp:
+    build:
+      context: ./playwright-mcp
+      dockerfile: Dockerfile
+    container_name: ui-automation-playwright-mcp${WORKSPACE_SUFFIX:-}
+    networks:
+      - ui-automation-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/sse', r => { r.statusCode === 200 ? process.exit(0) : process.exit(1) }).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # Go backend API
   backend:
     build:
@@ -41,10 +56,25 @@ services:
       - STORAGE_TYPE=local
       - STORAGE_BASE_DIR=/uploads
       - LOG_LEVEL=info
+      - AGENT_PLAYWRIGHT_MCP_URL=http://playwright-mcp:3000
+      - AGENT_MAX_ITERATIONS=50
+      - AGENT_TIME_LIMIT=10m
+      - AGENT_BEDROCK_REGION=${AWS_REGION:-us-east-1}
+      - AGENT_BEDROCK_MODEL=anthropic.claude-sonnet-4-6
+      - AGENT_BEDROCK_ACCESS_KEY=${AWS_ACCESS_KEY_ID:-}
+      - AGENT_BEDROCK_SECRET_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AGENT_MAX_CONCURRENT_WORKERS=1
+      - AGENT_SCRIPT_PATH=/root/agent/agent_runner.py
+      - CLAUDE_CODE_USE_BEDROCK=1
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
     volumes:
       - uploads_data:/uploads
     depends_on:
       mysql:
+        condition: service_healthy
+      playwright-mcp:
         condition: service_healthy
     networks:
       - ui-automation-network

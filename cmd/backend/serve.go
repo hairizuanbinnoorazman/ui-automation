@@ -10,15 +10,18 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/hairizuan-noorazman/ui-automation/cmd/backend/handlers"
-	"github.com/hairizuan-noorazman/ui-automation/database"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/project"
-	"github.com/hairizuan-noorazman/ui-automation/session"
-	"github.com/hairizuan-noorazman/ui-automation/storage"
-	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
-	"github.com/hairizuan-noorazman/ui-automation/testrun"
-	"github.com/hairizuan-noorazman/ui-automation/user"
+	"github.com/hairizuanbinnoorazman/ui-automation/agent"
+	"github.com/hairizuanbinnoorazman/ui-automation/cmd/backend/handlers"
+	"github.com/hairizuanbinnoorazman/ui-automation/database"
+	"github.com/hairizuanbinnoorazman/ui-automation/endpoint"
+	"github.com/hairizuanbinnoorazman/ui-automation/job"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/session"
+	"github.com/hairizuanbinnoorazman/ui-automation/storage"
+	"github.com/hairizuanbinnoorazman/ui-automation/testprocedure"
+	"github.com/hairizuanbinnoorazman/ui-automation/testrun"
+	"github.com/hairizuanbinnoorazman/ui-automation/user"
 	"github.com/spf13/cobra"
 )
 
@@ -110,6 +113,28 @@ func runServer(cmd *cobra.Command, args []string) error {
 	testRunStore := testrun.NewMySQLStore(db, log)
 	assetStore := testrun.NewMySQLAssetStore(db, log)
 	stepNoteStore := testrun.NewMySQLStepNoteStore(db, log)
+	endpointStore := endpoint.NewMySQLStore(db, log)
+	jobStore := job.NewMySQLStore(db, log)
+
+	// Initialize agent pipeline
+	agentCfg := agent.Config{
+		MaxIterations:       cfg.Agent.MaxIterations,
+		TimeLimit:           cfg.Agent.TimeLimit,
+		BedrockRegion:       cfg.Agent.BedrockRegion,
+		BedrockModel:        cfg.Agent.BedrockModel,
+		BedrockAccessKey:    cfg.Agent.BedrockAccessKey,
+		BedrockSecretKey:    cfg.Agent.BedrockSecretKey,
+		PlaywrightMCPURL:    cfg.Agent.PlaywrightMCPURL,
+		AgentScriptPath:     cfg.Agent.AgentScriptPath,
+		MaxConcurrentWorkers: cfg.Agent.MaxConcurrentWorkers,
+	}
+	agentPipeline := agent.NewPipeline(agentCfg, jobStore, endpointStore, testProcedureStore, blobStorage, log)
+
+	// Initialize and start worker pool
+	workerPool := agent.NewWorkerPool(agentCfg.MaxConcurrentWorkers, jobStore, agentPipeline, log)
+	poolCtx, poolCancel := context.WithCancel(ctx)
+	defer poolCancel()
+	workerPool.Start(poolCtx)
 
 	// Initialize session manager
 	sessionManager := session.NewManager(cfg.Session.Duration, log)
@@ -232,6 +257,21 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/runs/{run_id}/steps/notes", testRunHandler.GetStepNotes).Methods("GET")
 	apiRouter.HandleFunc("/runs/{run_id}/steps/{step_index}/notes", testRunHandler.SetStepNote).Methods("PUT")
 
+	// Endpoint routes (protected)
+	endpointHandler := handlers.NewEndpointHandler(endpointStore, log)
+	apiRouter.HandleFunc("/endpoints", endpointHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/endpoints", endpointHandler.Create).Methods("POST")
+	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.Update).Methods("PUT")
+	apiRouter.HandleFunc("/endpoints/{id}", endpointHandler.Delete).Methods("DELETE")
+
+	// Job routes (protected)
+	jobHandler := handlers.NewJobHandler(jobStore, endpointStore, projectStore, workerPool, agentPipeline, log)
+	apiRouter.HandleFunc("/jobs", jobHandler.List).Methods("GET")
+	apiRouter.HandleFunc("/jobs", jobHandler.Create).Methods("POST")
+	apiRouter.HandleFunc("/jobs/{id}", jobHandler.GetByID).Methods("GET")
+	apiRouter.HandleFunc("/jobs/{id}/stop", jobHandler.Stop).Methods("POST")
+
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	server := &http.Server{
@@ -259,6 +299,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	<-quit
 
 	log.Info(ctx, "shutting down server", nil)
+
+	// Stop worker pool
+	poolCancel()
 
 	// Graceful shutdown with timeout
 	shutdownCtx, cancel := context.WithTimeout(ctx, 30*time.Second)

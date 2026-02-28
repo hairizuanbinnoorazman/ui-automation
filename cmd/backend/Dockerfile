@@ -8,9 +8,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o backend ./cmd/backend
 
 # Stage 2: Runtime
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates wget
+RUN apk --no-cache add ca-certificates wget python3 py3-pip nodejs npm
+# Install claude-agent-sdk and anyio
+RUN pip3 install --break-system-packages claude-agent-sdk anyio
 WORKDIR /root/
 COPY --from=builder /app/backend .
 COPY --from=builder /app/database/migrations ./database/migrations
+COPY --from=builder /app/agent/agent_runner.py ./agent/agent_runner.py
 EXPOSE 8080
 CMD ["./backend", "serve"]

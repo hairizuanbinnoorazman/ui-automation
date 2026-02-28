@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/hairizuan-noorazman/ui-automation/database"
+	"github.com/hairizuanbinnoorazman/ui-automation/database"
 	"github.com/spf13/cobra"
 )
 

@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/securecookie"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/session"
-	"github.com/hairizuan-noorazman/ui-automation/user"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/session"
+	"github.com/hairizuanbinnoorazman/ui-automation/user"
 )
 
 // AuthHandler handles authentication-related requests.

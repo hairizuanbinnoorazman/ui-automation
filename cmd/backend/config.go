@@ -8,6 +8,19 @@ import (
 	"github.com/spf13/viper"
 )
 
+// AgentConfig holds agent pipeline configuration.
+type AgentConfig struct {
+	MaxIterations       int
+	TimeLimit           time.Duration
+	BedrockRegion       string
+	BedrockModel        string
+	BedrockAccessKey    string
+	BedrockSecretKey    string
+	PlaywrightMCPURL    string
+	AgentScriptPath     string
+	MaxConcurrentWorkers int
+}
+
 // Config holds all application configuration.
 type Config struct {
 	Server   ServerConfig
@@ -15,6 +28,7 @@ type Config struct {
 	Session  SessionConfig
 	Storage  StorageConfig
 	Log      LogConfig
+	Agent    AgentConfig
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -103,6 +117,16 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	v.SetDefault("log.level", "info")
 
+	v.SetDefault("agent.max_iterations", 50)
+	v.SetDefault("agent.time_limit", "10m")
+	v.SetDefault("agent.bedrock_region", "us-east-1")
+	v.SetDefault("agent.bedrock_model", "anthropic.claude-sonnet-4-6")
+	v.SetDefault("agent.bedrock_access_key", "")
+	v.SetDefault("agent.bedrock_secret_key", "")
+	v.SetDefault("agent.playwright_mcp_url", "http://localhost:3000")
+	v.SetDefault("agent.script_path", "/app/agent/agent_runner.py")
+	v.SetDefault("agent.max_concurrent_workers", 1)
+
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -139,6 +163,16 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Storage.S3PresignExpiry = v.GetDuration("storage.s3_presign_expiry")
 
 	config.Log.Level = v.GetString("log.level")
+
+	config.Agent.MaxIterations = v.GetInt("agent.max_iterations")
+	config.Agent.TimeLimit = v.GetDuration("agent.time_limit")
+	config.Agent.BedrockRegion = v.GetString("agent.bedrock_region")
+	config.Agent.BedrockModel = v.GetString("agent.bedrock_model")
+	config.Agent.BedrockAccessKey = v.GetString("agent.bedrock_access_key")
+	config.Agent.BedrockSecretKey = v.GetString("agent.bedrock_secret_key")
+	config.Agent.PlaywrightMCPURL = v.GetString("agent.playwright_mcp_url")
+	config.Agent.AgentScriptPath = v.GetString("agent.script_path")
+	config.Agent.MaxConcurrentWorkers = v.GetInt("agent.max_concurrent_workers")
 
 	return &config, nil
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
 	"gorm.io/gorm"
 )
 

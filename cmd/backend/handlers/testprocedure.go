@@ -12,10 +12,10 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/project"
-	"github.com/hairizuan-noorazman/ui-automation/storage"
-	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/storage"
+	"github.com/hairizuanbinnoorazman/ui-automation/testprocedure"
 )
 
 // TestProcedureHandler handles test procedure-related requests.

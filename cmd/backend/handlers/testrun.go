@@ -14,12 +14,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/project"
-	"github.com/hairizuan-noorazman/ui-automation/storage"
-	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
-	"github.com/hairizuan-noorazman/ui-automation/testrun"
-	"github.com/hairizuan-noorazman/ui-automation/user"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/storage"
+	"github.com/hairizuanbinnoorazman/ui-automation/testprocedure"
+	"github.com/hairizuanbinnoorazman/ui-automation/testrun"
+	"github.com/hairizuanbinnoorazman/ui-automation/user"
 )
 
 const (

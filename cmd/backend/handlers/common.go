@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
 )
 
 // ErrorResponse represents an error response.
