@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/project"
 )
 
 // ProjectHandler handles project-related requests.

@@ -11,11 +11,11 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/hairizuan-noorazman/ui-automation/endpoint"
-	"github.com/hairizuan-noorazman/ui-automation/job"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/storage"
-	"github.com/hairizuan-noorazman/ui-automation/testprocedure"
+	"github.com/hairizuanbinnoorazman/ui-automation/endpoint"
+	"github.com/hairizuanbinnoorazman/ui-automation/job"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/storage"
+	"github.com/hairizuanbinnoorazman/ui-automation/testprocedure"
 )
 
 // Pipeline orchestrates UI exploration by spawning a Python agent subprocess.

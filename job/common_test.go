@@ -3,8 +3,8 @@ package job
 import (
 	"testing"
 
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/testutil"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/testutil"
 	"gorm.io/gorm"
 )
 

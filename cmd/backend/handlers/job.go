@@ -6,11 +6,11 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/hairizuan-noorazman/ui-automation/agent"
-	"github.com/hairizuan-noorazman/ui-automation/endpoint"
-	"github.com/hairizuan-noorazman/ui-automation/job"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/agent"
+	"github.com/hairizuanbinnoorazman/ui-automation/endpoint"
+	"github.com/hairizuanbinnoorazman/ui-automation/job"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/project"
 )
 
 // JobHandler handles job-related requests.

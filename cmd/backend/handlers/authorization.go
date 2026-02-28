@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
-	"github.com/hairizuan-noorazman/ui-automation/project"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/project"
 )
 
 const (

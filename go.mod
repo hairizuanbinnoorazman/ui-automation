@@ -1,4 +1,4 @@
-module github.com/hairizuan-noorazman/ui-automation
+module github.com/hairizuanbinnoorazman/ui-automation
 
 go 1.25.0
 

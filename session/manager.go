@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
 )
 
 // Manager manages user sessions with automatic cleanup.

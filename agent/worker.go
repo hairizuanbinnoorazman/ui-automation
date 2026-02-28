@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"github.com/hairizuan-noorazman/ui-automation/job"
-	"github.com/hairizuan-noorazman/ui-automation/logger"
+	"github.com/hairizuanbinnoorazman/ui-automation/job"
+	"github.com/hairizuanbinnoorazman/ui-automation/logger"
 )
 
 // WorkerPool manages a pool of goroutines that process jobs from the database.
