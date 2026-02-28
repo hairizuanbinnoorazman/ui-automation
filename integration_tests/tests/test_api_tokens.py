@@ -141,3 +141,80 @@ class TestBearerTokenAuth:
                 "GET", "/projects", raw_token,
             )
         assert exc_info.value.status_code == 401
+
+
+class TestWriteScopeEnforcement:
+    """Verify that read_only tokens cannot perform write operations."""
+
+    def test_read_only_token_can_read(self, authenticated_client: UIAutomationClient):
+        resp = authenticated_client.create_api_token(
+            name="ro-read-test", scope="read_only",
+        )
+        raw_token = resp["token"]
+        try:
+            result = authenticated_client.request_with_token(
+                "GET", "/projects", raw_token, params={"limit": 1},
+            )
+            assert "items" in result
+        finally:
+            authenticated_client.revoke_api_token(resp["id"])
+
+    def test_read_only_token_blocked_on_post(
+        self, authenticated_client: UIAutomationClient,
+    ):
+        resp = authenticated_client.create_api_token(
+            name="ro-post-test", scope="read_only",
+        )
+        raw_token = resp["token"]
+        try:
+            with pytest.raises(APIError) as exc_info:
+                authenticated_client.request_with_token(
+                    "POST",
+                    "/projects",
+                    raw_token,
+                    json={"name": "should-fail", "description": "blocked"},
+                )
+            assert exc_info.value.status_code == 403
+        finally:
+            authenticated_client.revoke_api_token(resp["id"])
+
+    def test_read_only_token_blocked_on_delete(
+        self, authenticated_client: UIAutomationClient,
+    ):
+        # Create a project via session so we have something to try deleting
+        project = authenticated_client.create_project(
+            name="ro-delete-target", description="target",
+        )
+        resp = authenticated_client.create_api_token(
+            name="ro-del-test", scope="read_only",
+        )
+        raw_token = resp["token"]
+        try:
+            with pytest.raises(APIError) as exc_info:
+                authenticated_client.request_with_token(
+                    "DELETE", f"/projects/{project['id']}", raw_token,
+                )
+            assert exc_info.value.status_code == 403
+        finally:
+            authenticated_client.revoke_api_token(resp["id"])
+            authenticated_client.delete_project(project["id"])
+
+    def test_read_write_token_can_write(
+        self, authenticated_client: UIAutomationClient,
+    ):
+        resp = authenticated_client.create_api_token(
+            name="rw-write-test", scope="read_write",
+        )
+        raw_token = resp["token"]
+        try:
+            result = authenticated_client.request_with_token(
+                "POST",
+                "/projects",
+                raw_token,
+                json={"name": "rw-token-project", "description": "created by rw token"},
+            )
+            assert "id" in result
+            # Cleanup the created project
+            authenticated_client.delete_project(result["id"])
+        finally:
+            authenticated_client.revoke_api_token(resp["id"])

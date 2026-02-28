@@ -159,3 +159,18 @@ func RequireWriteScope(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
+
+// WriteScopeMiddleware enforces write scope for state-mutating HTTP methods.
+// GET and HEAD requests pass through regardless of scope. POST, PUT, DELETE,
+// and PATCH require read_write scope.
+func WriteScopeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
+			if !RequireWriteScope(w, r) {
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
