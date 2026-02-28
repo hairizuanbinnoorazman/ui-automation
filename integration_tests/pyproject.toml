@@ -20,4 +20,5 @@ markers = [
     "endpoints: endpoint CRUD tests",
     "jobs: job management tests",
     "agent: agent pipeline tests (requires Bedrock credentials)",
+    "tokens: API token management tests",
 ]

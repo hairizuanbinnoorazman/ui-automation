@@ -10,6 +10,7 @@ import Http
 import Pages.Endpoints as Endpoints
 import Pages.Jobs as Jobs
 import Pages.Login as Login
+import Pages.Manage as Manage
 import Pages.ProcedureDetail as ProcedureDetail
 import Pages.Projects as Projects
 import Pages.Register as Register
@@ -57,6 +58,7 @@ type alias Model =
     , testRunDetailModel : Maybe TestRunDetail.Model
     , endpointsModel : Maybe Endpoints.Model
     , jobsModel : Maybe Jobs.Model
+    , manageModel : Maybe Manage.Model
     }
 
 
@@ -70,6 +72,7 @@ type Route
     | TestRunDetail String
     | Endpoints
     | Jobs
+    | Manage
     | NotFound
 
 
@@ -99,6 +102,7 @@ init _ url key =
       , testRunDetailModel = Nothing
       , endpointsModel = Nothing
       , jobsModel = Nothing
+      , manageModel = Nothing
       }
     , API.getMe SessionCheckResponse
     )
@@ -123,6 +127,7 @@ type Msg
     | TestRunDetailMsg TestRunDetail.Msg
     | EndpointsMsg Endpoints.Msg
     | JobsMsg Jobs.Msg
+    | ManageMsg Manage.Msg
     | Logout
     | LogoutResponse (Result Http.Error ())
 
@@ -227,6 +232,15 @@ update msg model =
                                     ( { model | jobsModel = Just jm }
                                     , Cmd.map JobsMsg jc
                                     )
+
+                        Manage ->
+                            let
+                                ( mm, mc ) =
+                                    Manage.init
+                            in
+                            ( { model | manageModel = Just mm }
+                            , Cmd.map ManageMsg mc
+                            )
 
                         _ ->
                             ( model, Cmd.none )
@@ -354,6 +368,18 @@ update msg model =
                                 , jobsModel = Just jm
                               }
                             , Cmd.map JobsMsg jc
+                            )
+
+                        Manage ->
+                            let
+                                ( mm, mc ) =
+                                    Manage.init
+                            in
+                            ( { model
+                                | user = Just user
+                                , manageModel = Just mm
+                              }
+                            , Cmd.map ManageMsg mc
                             )
 
                         NotFound ->
@@ -543,6 +569,20 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
+        ManageMsg subMsg ->
+            case model.manageModel of
+                Just manageModel ->
+                    let
+                        ( newModel, cmd ) =
+                            Manage.update subMsg manageModel
+                    in
+                    ( { model | manageModel = Just newModel }
+                    , Cmd.map ManageMsg cmd
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
         Logout ->
             ( model
             , API.logout LogoutResponse
@@ -720,6 +760,20 @@ viewTopAppBar model =
                         , Html.Attributes.style "white-space" "nowrap"
                         ]
                         [ Html.text user.username ]
+                    , Html.a
+                        [ Html.Attributes.href "/manage"
+                        , Html.Attributes.style "color" "white"
+                        , Html.Attributes.style "background" "rgba(255, 255, 255, 0.1)"
+                        , Html.Attributes.style "border" "1px solid rgba(255, 255, 255, 0.3)"
+                        , Html.Attributes.style "border-radius" "4px"
+                        , Html.Attributes.style "cursor" "pointer"
+                        , Html.Attributes.style "font-size" "14px"
+                        , Html.Attributes.style "padding" "6px 12px"
+                        , Html.Attributes.style "text-decoration" "none"
+                        , Html.Attributes.style "display" "flex"
+                        , Html.Attributes.style "align-items" "center"
+                        ]
+                        [ Html.text "Manage" ]
                     , Html.button
                         [ Html.Events.onClick Logout
                         , Html.Attributes.style "color" "white"
@@ -892,6 +946,19 @@ viewContent model =
                         Nothing ->
                             Html.map LoginMsg (Login.view model.loginModel)
 
+                Manage ->
+                    case model.user of
+                        Just _ ->
+                            case model.manageModel of
+                                Just manageModel ->
+                                    Html.map ManageMsg (Manage.view manageModel)
+
+                                Nothing ->
+                                    Html.div [] [ Html.text "Loading..." ]
+
+                        Nothing ->
+                            Html.map LoginMsg (Login.view model.loginModel)
+
                 NotFound ->
                     Html.div []
                         [ Html.h1 [] [ Html.text "404 Not Found" ]
@@ -925,4 +992,5 @@ routeParser =
         , Parser.map TestRunDetail (Parser.s "runs" </> Parser.string)
         , Parser.map Endpoints (Parser.s "endpoints")
         , Parser.map Jobs (Parser.s "jobs")
+        , Parser.map Manage (Parser.s "manage")
         ]

@@ -272,3 +272,39 @@ class UIAutomationClient:
 
     def stop_job(self, job_id: str) -> dict:
         return self._request("POST", f"/jobs/{job_id}/stop")
+
+    # --- API Tokens ---
+
+    def create_api_token(
+        self,
+        name: str,
+        scope: str = "read_only",
+        expires_in_hours: int = 720,
+    ) -> dict:
+        return self._request("POST", "/tokens", json={
+            "name": name,
+            "scope": scope,
+            "expires_in_hours": expires_in_hours,
+        })
+
+    def list_api_tokens(self) -> dict:
+        return self._request("GET", "/tokens")
+
+    def revoke_api_token(self, token_id: str) -> dict:
+        return self._request("DELETE", f"/tokens/{token_id}")
+
+    def request_with_token(self, method: str, path: str, token: str, **kwargs) -> dict:
+        """Make an API request using a Bearer token instead of session cookies."""
+        headers = {"Authorization": f"Bearer {token}"}
+        resp = requests.request(
+            method, self._url(path), headers=headers, **kwargs,
+        )
+        if not resp.ok:
+            try:
+                body = resp.json()
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                body = resp.text
+            raise APIError(status_code=resp.status_code, body=body)
+        if resp.status_code == 204 or not resp.content:
+            return {}
+        return resp.json()

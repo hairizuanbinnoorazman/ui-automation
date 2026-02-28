@@ -217,6 +217,43 @@ type alias TestRunAsset =
 
 
 
+-- API Token Types
+
+
+type alias APIToken =
+    { id : String
+    , name : String
+    , scope : String
+    , expiresAt : String
+    , isActive : Bool
+    , createdAt : String
+    }
+
+
+type alias CreateTokenInput =
+    { name : String
+    , scope : String
+    , expiresInHours : Int
+    }
+
+
+type alias CreateTokenResponse =
+    { id : String
+    , name : String
+    , scope : String
+    , token : String
+    , expiresAt : String
+    , createdAt : String
+    }
+
+
+type alias TokenListResponse =
+    { tokens : List APIToken
+    , total : Int
+    }
+
+
+
 -- User List Response
 
 
@@ -622,3 +659,41 @@ jobStatusToString status =
 
         JobSuccess ->
             "success"
+
+
+apiTokenDecoder : Decoder APIToken
+apiTokenDecoder =
+    Decode.map6 APIToken
+        (Decode.field "id" Decode.string)
+        (Decode.field "name" Decode.string)
+        (Decode.field "scope" Decode.string)
+        (Decode.field "expires_at" Decode.string)
+        (Decode.field "is_active" Decode.bool)
+        (Decode.field "created_at" Decode.string)
+
+
+createTokenResponseDecoder : Decoder CreateTokenResponse
+createTokenResponseDecoder =
+    Decode.map6 CreateTokenResponse
+        (Decode.field "id" Decode.string)
+        (Decode.field "name" Decode.string)
+        (Decode.field "scope" Decode.string)
+        (Decode.field "token" Decode.string)
+        (Decode.field "expires_at" Decode.string)
+        (Decode.field "created_at" Decode.string)
+
+
+tokenListResponseDecoder : Decoder TokenListResponse
+tokenListResponseDecoder =
+    Decode.map2 TokenListResponse
+        (Decode.field "tokens" (Decode.oneOf [ Decode.list apiTokenDecoder, Decode.null [] ]))
+        (Decode.field "total" Decode.int)
+
+
+createTokenInputEncoder : CreateTokenInput -> Encode.Value
+createTokenInputEncoder input =
+    Encode.object
+        [ ( "name", Encode.string input.name )
+        , ( "scope", Encode.string input.scope )
+        , ( "expires_in_hours", Encode.int input.expiresInHours )
+        ]
