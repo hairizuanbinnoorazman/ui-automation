@@ -15,6 +15,10 @@ import (
 	"github.com/hairizuanbinnoorazman/ui-automation/cmd/backend/handlers"
 	"github.com/hairizuanbinnoorazman/ui-automation/database"
 	"github.com/hairizuanbinnoorazman/ui-automation/endpoint"
+	"github.com/hairizuanbinnoorazman/ui-automation/integration"
+	"github.com/hairizuanbinnoorazman/ui-automation/issuetracker"
+	githubclient "github.com/hairizuanbinnoorazman/ui-automation/issuetracker/github"
+	jiraclient "github.com/hairizuanbinnoorazman/ui-automation/issuetracker/jira"
 	"github.com/hairizuanbinnoorazman/ui-automation/job"
 	"github.com/hairizuanbinnoorazman/ui-automation/logger"
 	"github.com/hairizuanbinnoorazman/ui-automation/project"
@@ -117,6 +121,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	endpointStore := endpoint.NewMySQLStore(db, log)
 	jobStore := job.NewMySQLStore(db, log)
 	apiTokenStore := apitoken.NewMySQLStore(db, log)
+	integrationStore := integration.NewMySQLStore(db, log)
 
 	// Initialize agent pipeline
 	agentCfg := agent.Config{
@@ -281,6 +286,30 @@ func runServer(cmd *cobra.Command, args []string) error {
 	apiRouter.HandleFunc("/tokens", apiTokenHandler.Create).Methods("POST")
 	apiRouter.HandleFunc("/tokens/{token_id}", apiTokenHandler.Revoke).Methods("DELETE")
 
+	// Integration routes (protected)
+	encryptionKey := integration.DeriveKey(cfg.Integration.EncryptionKey)
+	clientFactory := &defaultClientFactory{}
+	integrationHandler := handlers.NewIntegrationHandler(
+		integrationStore, clientFactory, encryptionKey,
+		testRunStore, testProcedureStore, projectStore, log,
+	)
+
+	apiRouter.HandleFunc("/integrations", integrationHandler.ListIntegrations).Methods("GET")
+	apiRouter.HandleFunc("/integrations", integrationHandler.CreateIntegration).Methods("POST")
+	apiRouter.HandleFunc("/integrations/{integration_id}", integrationHandler.GetIntegration).Methods("GET")
+	apiRouter.HandleFunc("/integrations/{integration_id}", integrationHandler.UpdateIntegration).Methods("PUT")
+	apiRouter.HandleFunc("/integrations/{integration_id}", integrationHandler.DeleteIntegration).Methods("DELETE")
+	apiRouter.HandleFunc("/integrations/{integration_id}/test", integrationHandler.TestConnection).Methods("POST")
+	apiRouter.HandleFunc("/integrations/{integration_id}/issues", integrationHandler.SearchExternalIssues).Methods("GET")
+
+	// Issue link routes (protected)
+	apiRouter.HandleFunc("/runs/{run_id}/issues", integrationHandler.ListIssueLinks).Methods("GET")
+	apiRouter.HandleFunc("/runs/{run_id}/issues", integrationHandler.CreateAndLinkIssue).Methods("POST")
+	apiRouter.HandleFunc("/runs/{run_id}/issues/link", integrationHandler.LinkExistingIssue).Methods("POST")
+	apiRouter.HandleFunc("/runs/{run_id}/issues/{link_id}", integrationHandler.UnlinkIssue).Methods("DELETE")
+	apiRouter.HandleFunc("/runs/{run_id}/issues/{link_id}/resolve", integrationHandler.ResolveLinkedIssue).Methods("POST")
+	apiRouter.HandleFunc("/runs/{run_id}/issues/{link_id}/sync", integrationHandler.SyncIssueStatus).Methods("POST")
+
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	server := &http.Server{
@@ -322,4 +351,20 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 	log.Info(ctx, "server stopped", nil)
 	return nil
+}
+
+// defaultClientFactory implements issuetracker.ClientFactory by delegating to
+// the github and jira sub-packages. It lives here (not in the issuetracker
+// package) to avoid an import cycle.
+type defaultClientFactory struct{}
+
+func (f *defaultClientFactory) NewClient(provider issuetracker.ProviderType, credentials map[string]string) (issuetracker.Client, error) {
+	switch provider {
+	case issuetracker.ProviderGitHub:
+		return githubclient.NewClient(credentials)
+	case issuetracker.ProviderJira:
+		return jiraclient.NewClient(credentials)
+	default:
+		return nil, issuetracker.ErrInvalidProvider
+	}
 }

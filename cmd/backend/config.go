@@ -21,14 +21,20 @@ type AgentConfig struct {
 	MaxConcurrentWorkers int
 }
 
+// IntegrationConfig holds issue tracker integration configuration.
+type IntegrationConfig struct {
+	EncryptionKey string
+}
+
 // Config holds all application configuration.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Session  SessionConfig
-	Storage  StorageConfig
-	Log      LogConfig
-	Agent    AgentConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	Session     SessionConfig
+	Storage     StorageConfig
+	Log         LogConfig
+	Agent       AgentConfig
+	Integration IntegrationConfig
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -127,6 +133,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("agent.script_path", "/app/agent/agent_runner.py")
 	v.SetDefault("agent.max_concurrent_workers", 1)
 
+	v.SetDefault("integration.encryption_key", "change-this-encryption-key-in-production-min32")
+
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -173,6 +181,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	config.Agent.PlaywrightMCPURL = v.GetString("agent.playwright_mcp_url")
 	config.Agent.AgentScriptPath = v.GetString("agent.script_path")
 	config.Agent.MaxConcurrentWorkers = v.GetInt("agent.max_concurrent_workers")
+
+	config.Integration.EncryptionKey = v.GetString("integration.encryption_key")
 
 	return &config, nil
 }

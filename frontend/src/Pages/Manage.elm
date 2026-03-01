@@ -6,11 +6,24 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
-import Types exposing (APIToken, CreateTokenInput, CreateTokenResponse, TokenListResponse)
+import Types exposing (APIToken, CreateTokenInput, CreateTokenResponse, Credential, Integration, IntegrationListResponse, TokenListResponse)
 
 
 
 -- MODEL
+
+
+type alias CreateIntegrationDialogState =
+    { name : String
+    , provider : String
+    , jiraUrl : String
+    , jiraEmail : String
+    , jiraApiToken : String
+    , jiraDefaultProject : String
+    , githubToken : String
+    , githubDefaultOwner : String
+    , githubDefaultRepo : String
+    }
 
 
 type alias Model =
@@ -21,6 +34,11 @@ type alias Model =
     , createDialog : Maybe CreateDialogState
     , createdTokenSecret : Maybe String
     , deleteDialog : Maybe APIToken
+    , integrations : List Integration
+    , integrationsLoading : Bool
+    , createIntegrationDialog : Maybe CreateIntegrationDialogState
+    , deleteIntegrationDialog : Maybe Integration
+    , testConnectionResult : Maybe (Result String String)
     }
 
 
@@ -40,8 +58,16 @@ init =
       , createDialog = Nothing
       , createdTokenSecret = Nothing
       , deleteDialog = Nothing
+      , integrations = []
+      , integrationsLoading = True
+      , createIntegrationDialog = Nothing
+      , deleteIntegrationDialog = Nothing
+      , testConnectionResult = Nothing
       }
-    , API.getAPITokens TokensResponse
+    , Cmd.batch
+        [ API.getAPITokens TokensResponse
+        , API.getIntegrations IntegrationsResponse
+        ]
     )
 
 
@@ -63,6 +89,26 @@ type Msg
     | CloseDeleteDialog
     | ConfirmDelete String
     | DeleteResponse (Result Http.Error ())
+    | IntegrationsResponse (Result Http.Error IntegrationListResponse)
+    | OpenCreateIntegrationDialog
+    | CloseCreateIntegrationDialog
+    | SetIntegrationName String
+    | SetIntegrationProvider String
+    | SetJiraUrl String
+    | SetJiraEmail String
+    | SetJiraApiToken String
+    | SetJiraDefaultProject String
+    | SetGithubToken String
+    | SetGithubDefaultOwner String
+    | SetGithubDefaultRepo String
+    | SubmitCreateIntegration
+    | CreateIntegrationResponse (Result Http.Error Integration)
+    | OpenDeleteIntegrationDialog Integration
+    | CloseDeleteIntegrationDialog
+    | ConfirmDeleteIntegration String
+    | DeleteIntegrationResponse (Result Http.Error ())
+    | TestConnection String
+    | TestConnectionResponse (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -205,6 +251,227 @@ update msg model =
             , Cmd.none
             )
 
+        IntegrationsResponse (Ok response) ->
+            ( { model
+                | integrations = response.items
+                , integrationsLoading = False
+              }
+            , Cmd.none
+            )
+
+        IntegrationsResponse (Err error) ->
+            ( { model
+                | integrationsLoading = False
+                , error = Just (httpErrorToString error)
+              }
+            , Cmd.none
+            )
+
+        OpenCreateIntegrationDialog ->
+            ( { model
+                | createIntegrationDialog =
+                    Just
+                        { name = ""
+                        , provider = "jira"
+                        , jiraUrl = ""
+                        , jiraEmail = ""
+                        , jiraApiToken = ""
+                        , jiraDefaultProject = ""
+                        , githubToken = ""
+                        , githubDefaultOwner = ""
+                        , githubDefaultRepo = ""
+                        }
+              }
+            , Cmd.none
+            )
+
+        CloseCreateIntegrationDialog ->
+            ( { model | createIntegrationDialog = Nothing }
+            , Cmd.none
+            )
+
+        SetIntegrationName name ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | name = name } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetIntegrationProvider provider ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | provider = provider } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetJiraUrl url ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | jiraUrl = url } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetJiraEmail email ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | jiraEmail = email } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetJiraApiToken token ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | jiraApiToken = token } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetJiraDefaultProject project ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | jiraDefaultProject = project } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetGithubToken token ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | githubToken = token } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetGithubDefaultOwner owner ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | githubDefaultOwner = owner } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SetGithubDefaultRepo repo ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    ( { model | createIntegrationDialog = Just { dialog | githubDefaultRepo = repo } }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SubmitCreateIntegration ->
+            case model.createIntegrationDialog of
+                Just dialog ->
+                    let
+                        credentials =
+                            if dialog.provider == "jira" then
+                                [ Credential "url" dialog.jiraUrl
+                                , Credential "email" dialog.jiraEmail
+                                , Credential "api_token" dialog.jiraApiToken
+                                , Credential "default_project" dialog.jiraDefaultProject
+                                ]
+
+                            else
+                                [ Credential "token" dialog.githubToken
+                                , Credential "default_owner" dialog.githubDefaultOwner
+                                , Credential "default_repo" dialog.githubDefaultRepo
+                                ]
+                    in
+                    ( { model | integrationsLoading = True }
+                    , API.createIntegration
+                        { name = dialog.name
+                        , provider = dialog.provider
+                        , credentials = credentials
+                        }
+                        CreateIntegrationResponse
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        CreateIntegrationResponse (Ok _) ->
+            ( { model
+                | integrationsLoading = False
+                , createIntegrationDialog = Nothing
+              }
+            , API.getIntegrations IntegrationsResponse
+            )
+
+        CreateIntegrationResponse (Err error) ->
+            ( { model
+                | integrationsLoading = False
+                , error = Just (httpErrorToString error)
+              }
+            , Cmd.none
+            )
+
+        OpenDeleteIntegrationDialog integration ->
+            ( { model | deleteIntegrationDialog = Just integration }
+            , Cmd.none
+            )
+
+        CloseDeleteIntegrationDialog ->
+            ( { model | deleteIntegrationDialog = Nothing }
+            , Cmd.none
+            )
+
+        ConfirmDeleteIntegration integrationId ->
+            ( { model | integrationsLoading = True }
+            , API.deleteIntegration integrationId DeleteIntegrationResponse
+            )
+
+        DeleteIntegrationResponse (Ok ()) ->
+            ( { model
+                | integrationsLoading = False
+                , deleteIntegrationDialog = Nothing
+              }
+            , API.getIntegrations IntegrationsResponse
+            )
+
+        DeleteIntegrationResponse (Err error) ->
+            ( { model
+                | integrationsLoading = False
+                , error = Just (httpErrorToString error)
+              }
+            , Cmd.none
+            )
+
+        TestConnection integrationId ->
+            ( { model | testConnectionResult = Nothing }
+            , API.testIntegrationConnection integrationId TestConnectionResponse
+            )
+
+        TestConnectionResponse (Ok ()) ->
+            ( { model | testConnectionResult = Just (Ok "Connection successful") }
+            , Cmd.none
+            )
+
+        TestConnectionResponse (Err error) ->
+            ( { model | testConnectionResult = Just (Err (httpErrorToString error)) }
+            , Cmd.none
+            )
+
 
 
 -- VIEW
@@ -256,6 +523,15 @@ view model =
         , case model.deleteDialog of
             Just token ->
                 viewDeleteDialog token
+
+            Nothing ->
+                Html.text ""
+        , Html.hr [ Html.Attributes.style "margin" "40px 0" ] []
+        , viewIntegrationsSection model
+        , viewCreateIntegrationDialog model.createIntegrationDialog
+        , case model.deleteIntegrationDialog of
+            Just integration ->
+                viewDeleteIntegrationDialog integration
 
             Nothing ->
                 Html.text ""
@@ -422,6 +698,252 @@ viewDeleteDialog token =
             , Html.Attributes.style "background-color" "#f44336"
             ]
             [ Html.text "Revoke" ]
+        ]
+
+
+
+-- Integrations Views
+
+
+viewIntegrationsSection : Model -> Html Msg
+viewIntegrationsSection model =
+    Html.div []
+        [ Html.h2
+            [ Html.Attributes.class "mdc-typography--headline5"
+            , Html.Attributes.style "margin-bottom" "16px"
+            ]
+            [ Html.text "Integrations" ]
+        , Html.div
+            [ Html.Attributes.style "margin-bottom" "20px" ]
+            [ Html.button
+                [ Html.Events.onClick OpenCreateIntegrationDialog
+                , Html.Attributes.class "mdc-button mdc-button--raised"
+                ]
+                [ Html.text "Connect Integration" ]
+            ]
+        , case model.testConnectionResult of
+            Just (Ok message) ->
+                Html.div
+                    [ Html.Attributes.style "color" "#388e3c"
+                    , Html.Attributes.style "background" "#e8f5e9"
+                    , Html.Attributes.style "padding" "12px"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    ]
+                    [ Html.text message ]
+
+            Just (Err message) ->
+                Html.div
+                    [ Html.Attributes.style "color" "#d32f2f"
+                    , Html.Attributes.style "background" "#ffebee"
+                    , Html.Attributes.style "padding" "12px"
+                    , Html.Attributes.style "border-radius" "4px"
+                    , Html.Attributes.style "margin-bottom" "16px"
+                    ]
+                    [ Html.text ("Connection failed: " ++ message) ]
+
+            Nothing ->
+                Html.text ""
+        , if model.integrationsLoading && List.isEmpty model.integrations then
+            Html.div [] [ Html.text "Loading..." ]
+
+          else
+            viewIntegrationsTable model.integrations
+        ]
+
+
+viewIntegrationsTable : List Integration -> Html Msg
+viewIntegrationsTable integrations =
+    if List.isEmpty integrations then
+        Html.div
+            [ Html.Attributes.style "color" "#666"
+            , Html.Attributes.style "padding" "20px"
+            ]
+            [ Html.text "No integrations configured. Connect one to get started." ]
+
+    else
+        Html.table
+            [ Html.Attributes.class "mdc-data-table__table"
+            , Html.Attributes.style "width" "100%"
+            , Html.Attributes.style "border-collapse" "collapse"
+            ]
+            [ Html.thead []
+                [ Html.tr []
+                    [ Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Name" ]
+                    , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Provider" ]
+                    , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Status" ]
+                    , Html.th [ Html.Attributes.style "text-align" "left", Html.Attributes.style "padding" "12px" ] [ Html.text "Actions" ]
+                    ]
+                ]
+            , Html.tbody []
+                (List.map viewIntegrationRow integrations)
+            ]
+
+
+viewIntegrationRow : Integration -> Html Msg
+viewIntegrationRow integration =
+    Html.tr [ Html.Attributes.style "border-bottom" "1px solid #ddd" ]
+        [ Html.td [ Html.Attributes.style "padding" "12px" ] [ Html.text integration.name ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ]
+            [ Html.span
+                [ Html.Attributes.style "background"
+                    (if integration.provider == "jira" then
+                        "#e3f2fd"
+
+                     else
+                        "#f3e5f5"
+                    )
+                , Html.Attributes.style "padding" "2px 8px"
+                , Html.Attributes.style "border-radius" "4px"
+                , Html.Attributes.style "font-size" "12px"
+                , Html.Attributes.style "text-transform" "capitalize"
+                ]
+                [ Html.text integration.provider ]
+            ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ]
+            [ Html.span
+                [ Html.Attributes.style "color"
+                    (if integration.isActive then
+                        "#388e3c"
+
+                     else
+                        "#d32f2f"
+                    )
+                , Html.Attributes.style "font-weight" "bold"
+                ]
+                [ Html.text
+                    (if integration.isActive then
+                        "Active"
+
+                     else
+                        "Inactive"
+                    )
+                ]
+            ]
+        , Html.td [ Html.Attributes.style "padding" "12px" ]
+            [ Html.button
+                [ Html.Events.onClick (TestConnection integration.id)
+                , Html.Attributes.class "mdc-button"
+                , Html.Attributes.style "color" "#1976d2"
+                ]
+                [ Html.text "Test Connection" ]
+            , Html.button
+                [ Html.Events.onClick (OpenDeleteIntegrationDialog integration)
+                , Html.Attributes.class "mdc-button"
+                , Html.Attributes.style "color" "#f44336"
+                ]
+                [ Html.text "Delete" ]
+            ]
+        ]
+
+
+viewCreateIntegrationDialog : Maybe CreateIntegrationDialogState -> Html Msg
+viewCreateIntegrationDialog maybeDialog =
+    case maybeDialog of
+        Just dialog ->
+            Components.viewDialogOverlay "Connect Integration"
+                [ Components.viewFormField "Integration Name"
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value dialog.name
+                    , Html.Events.onInput SetIntegrationName
+                    , Html.Attributes.placeholder "e.g., My Jira Instance"
+                    , Html.Attributes.required True
+                    ]
+                , Components.viewSelectField "Provider"
+                    [ Html.Events.onInput SetIntegrationProvider
+                    , Html.Attributes.value dialog.provider
+                    ]
+                    [ Html.option [ Html.Attributes.value "jira", Html.Attributes.selected (dialog.provider == "jira") ] [ Html.text "Jira" ]
+                    , Html.option [ Html.Attributes.value "github", Html.Attributes.selected (dialog.provider == "github") ] [ Html.text "GitHub" ]
+                    ]
+                , if dialog.provider == "jira" then
+                    Html.div []
+                        [ Components.viewFormField "Instance URL"
+                            [ Html.Attributes.type_ "text"
+                            , Html.Attributes.value dialog.jiraUrl
+                            , Html.Events.onInput SetJiraUrl
+                            , Html.Attributes.placeholder "https://your-domain.atlassian.net"
+                            , Html.Attributes.required True
+                            ]
+                        , Components.viewFormField "Email"
+                            [ Html.Attributes.type_ "email"
+                            , Html.Attributes.value dialog.jiraEmail
+                            , Html.Events.onInput SetJiraEmail
+                            , Html.Attributes.placeholder "your-email@example.com"
+                            , Html.Attributes.required True
+                            ]
+                        , Components.viewFormField "API Token"
+                            [ Html.Attributes.type_ "password"
+                            , Html.Attributes.value dialog.jiraApiToken
+                            , Html.Events.onInput SetJiraApiToken
+                            , Html.Attributes.placeholder "Your Jira API token"
+                            , Html.Attributes.required True
+                            ]
+                        , Components.viewFormField "Default Project Key"
+                            [ Html.Attributes.type_ "text"
+                            , Html.Attributes.value dialog.jiraDefaultProject
+                            , Html.Events.onInput SetJiraDefaultProject
+                            , Html.Attributes.placeholder "e.g., PROJ"
+                            ]
+                        ]
+
+                  else
+                    Html.div []
+                        [ Components.viewFormField "Personal Access Token"
+                            [ Html.Attributes.type_ "password"
+                            , Html.Attributes.value dialog.githubToken
+                            , Html.Events.onInput SetGithubToken
+                            , Html.Attributes.placeholder "ghp_..."
+                            , Html.Attributes.required True
+                            ]
+                        , Components.viewFormField "Default Owner"
+                            [ Html.Attributes.type_ "text"
+                            , Html.Attributes.value dialog.githubDefaultOwner
+                            , Html.Events.onInput SetGithubDefaultOwner
+                            , Html.Attributes.placeholder "e.g., my-org"
+                            ]
+                        , Components.viewFormField "Default Repository"
+                            [ Html.Attributes.type_ "text"
+                            , Html.Attributes.value dialog.githubDefaultRepo
+                            , Html.Events.onInput SetGithubDefaultRepo
+                            , Html.Attributes.placeholder "e.g., my-repo"
+                            ]
+                        ]
+                ]
+                [ Html.button
+                    [ Html.Events.onClick CloseCreateIntegrationDialog
+                    , Html.Attributes.class "mdc-button"
+                    ]
+                    [ Html.text "Cancel" ]
+                , Html.button
+                    [ Html.Events.onClick SubmitCreateIntegration
+                    , Html.Attributes.class "mdc-button mdc-button--raised"
+                    ]
+                    [ Html.text "Connect" ]
+                ]
+
+        Nothing ->
+            Html.text ""
+
+
+viewDeleteIntegrationDialog : Integration -> Html Msg
+viewDeleteIntegrationDialog integration =
+    Components.viewDialogOverlay "Delete Integration"
+        [ Html.div []
+            [ Html.text ("Are you sure you want to delete the integration \"" ++ integration.name ++ "\"? This will also remove all associated issue links. This action cannot be undone.")
+            ]
+        ]
+        [ Html.button
+            [ Html.Events.onClick CloseDeleteIntegrationDialog
+            , Html.Attributes.class "mdc-button"
+            ]
+            [ Html.text "Cancel" ]
+        , Html.button
+            [ Html.Events.onClick (ConfirmDeleteIntegration integration.id)
+            , Html.Attributes.class "mdc-button mdc-button--raised"
+            , Html.Attributes.style "background-color" "#f44336"
+            ]
+            [ Html.text "Delete" ]
         ]
 
 

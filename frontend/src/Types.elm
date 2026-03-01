@@ -254,6 +254,72 @@ type alias TokenListResponse =
 
 
 
+-- Integration Types
+
+
+type alias Integration =
+    { id : String
+    , name : String
+    , provider : String
+    , isActive : Bool
+    , createdAt : Time.Posix
+    , updatedAt : Time.Posix
+    }
+
+
+type alias CreateIntegrationInput =
+    { name : String
+    , provider : String
+    , credentials : List Credential
+    }
+
+
+type alias IssueLink =
+    { id : String
+    , testRunId : String
+    , integrationId : String
+    , externalId : String
+    , title : String
+    , status : String
+    , url : String
+    , provider : String
+    , createdAt : Time.Posix
+    , updatedAt : Time.Posix
+    }
+
+
+type alias ExternalIssue =
+    { externalId : String
+    , title : String
+    , status : String
+    , url : String
+    }
+
+
+type alias CreateIssueLinkInput =
+    { integrationId : String
+    , title : String
+    , description : String
+    , projectKey : String
+    , issueType : String
+    , repository : String
+    , labels : List String
+    }
+
+
+type alias LinkExistingIssueInput =
+    { integrationId : String
+    , externalId : String
+    }
+
+
+type alias IntegrationListResponse =
+    { items : List Integration
+    , total : Int
+    }
+
+
+
 -- User List Response
 
 
@@ -690,10 +756,90 @@ tokenListResponseDecoder =
         (Decode.field "total" Decode.int)
 
 
+integrationDecoder : Decoder Integration
+integrationDecoder =
+    Decode.map6 Integration
+        (Decode.field "id" Decode.string)
+        (Decode.field "name" Decode.string)
+        (Decode.field "provider" Decode.string)
+        (Decode.field "is_active" Decode.bool)
+        (Decode.field "created_at" timeDecoder)
+        (Decode.field "updated_at" timeDecoder)
+
+
+issueLinkDecoder : Decoder IssueLink
+issueLinkDecoder =
+    Decode.map8
+        (\id testRunId integrationId externalId title status url provider ->
+            \createdAt updatedAt ->
+                IssueLink id testRunId integrationId externalId title status url provider createdAt updatedAt
+        )
+        (Decode.field "id" Decode.string)
+        (Decode.field "test_run_id" Decode.string)
+        (Decode.field "integration_id" Decode.string)
+        (Decode.field "external_id" Decode.string)
+        (Decode.field "title" Decode.string)
+        (Decode.field "status" Decode.string)
+        (Decode.field "url" Decode.string)
+        (Decode.field "provider" Decode.string)
+        |> Decode.andThen
+            (\fn ->
+                Decode.map2 fn
+                    (Decode.field "created_at" timeDecoder)
+                    (Decode.field "updated_at" timeDecoder)
+            )
+
+
+externalIssueDecoder : Decoder ExternalIssue
+externalIssueDecoder =
+    Decode.map4 ExternalIssue
+        (Decode.field "external_id" Decode.string)
+        (Decode.field "title" Decode.string)
+        (Decode.field "status" Decode.string)
+        (Decode.field "url" Decode.string)
+
+
+integrationListResponseDecoder : Decoder IntegrationListResponse
+integrationListResponseDecoder =
+    Decode.map2 IntegrationListResponse
+        (Decode.field "items" (Decode.oneOf [ Decode.list integrationDecoder, Decode.null [] ]))
+        (Decode.field "total" Decode.int)
+
+
 createTokenInputEncoder : CreateTokenInput -> Encode.Value
 createTokenInputEncoder input =
     Encode.object
         [ ( "name", Encode.string input.name )
         , ( "scope", Encode.string input.scope )
         , ( "expires_in_hours", Encode.int input.expiresInHours )
+        ]
+
+
+createIntegrationInputEncoder : CreateIntegrationInput -> Encode.Value
+createIntegrationInputEncoder input =
+    Encode.object
+        [ ( "name", Encode.string input.name )
+        , ( "provider", Encode.string input.provider )
+        , ( "credentials", Encode.list credentialEncoder input.credentials )
+        ]
+
+
+createIssueLinkInputEncoder : CreateIssueLinkInput -> Encode.Value
+createIssueLinkInputEncoder input =
+    Encode.object
+        [ ( "integration_id", Encode.string input.integrationId )
+        , ( "title", Encode.string input.title )
+        , ( "description", Encode.string input.description )
+        , ( "project_key", Encode.string input.projectKey )
+        , ( "issue_type", Encode.string input.issueType )
+        , ( "repository", Encode.string input.repository )
+        , ( "labels", Encode.list Encode.string input.labels )
+        ]
+
+
+linkExistingIssueInputEncoder : LinkExistingIssueInput -> Encode.Value
+linkExistingIssueInputEncoder input =
+    Encode.object
+        [ ( "integration_id", Encode.string input.integrationId )
+        , ( "external_id", Encode.string input.externalId )
         ]
