@@ -525,3 +525,115 @@ revokeAPIToken tokenId toMsg =
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
+
+-- Integrations
+
+
+getIntegrations : (Result Http.Error IntegrationListResponse -> msg) -> Cmd msg
+getIntegrations toMsg =
+    Http.get
+        { url = baseUrl ++ "/integrations"
+        , expect = Http.expectJson toMsg integrationListResponseDecoder
+        }
+
+
+createIntegration : CreateIntegrationInput -> (Result Http.Error Integration -> msg) -> Cmd msg
+createIntegration input toMsg =
+    Http.post
+        { url = baseUrl ++ "/integrations"
+        , body = Http.jsonBody (createIntegrationInputEncoder input)
+        , expect = Http.expectJson toMsg integrationDecoder
+        }
+
+
+deleteIntegration : String -> (Result Http.Error () -> msg) -> Cmd msg
+deleteIntegration id toMsg =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = baseUrl ++ "/integrations/" ++ id
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+testIntegrationConnection : String -> (Result Http.Error () -> msg) -> Cmd msg
+testIntegrationConnection id toMsg =
+    Http.post
+        { url = baseUrl ++ "/integrations/" ++ id ++ "/test"
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        }
+
+
+searchExternalIssues : String -> String -> (Result Http.Error (List ExternalIssue) -> msg) -> Cmd msg
+searchExternalIssues integrationId query toMsg =
+    Http.get
+        { url = baseUrl ++ "/integrations/" ++ integrationId ++ "/issues?query=" ++ query
+        , expect = Http.expectJson toMsg (Decode.field "items" (Decode.list externalIssueDecoder))
+        }
+
+
+
+-- Issue Links
+
+
+getIssueLinks : String -> (Result Http.Error (List IssueLink) -> msg) -> Cmd msg
+getIssueLinks runId toMsg =
+    Http.get
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/issues"
+        , expect = Http.expectJson toMsg (Decode.list issueLinkDecoder)
+        }
+
+
+createAndLinkIssue : String -> CreateIssueLinkInput -> (Result Http.Error IssueLink -> msg) -> Cmd msg
+createAndLinkIssue runId input toMsg =
+    Http.post
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/issues"
+        , body = Http.jsonBody (createIssueLinkInputEncoder input)
+        , expect = Http.expectJson toMsg issueLinkDecoder
+        }
+
+
+linkExistingIssue : String -> LinkExistingIssueInput -> (Result Http.Error IssueLink -> msg) -> Cmd msg
+linkExistingIssue runId input toMsg =
+    Http.post
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/issues/link"
+        , body = Http.jsonBody (linkExistingIssueInputEncoder input)
+        , expect = Http.expectJson toMsg issueLinkDecoder
+        }
+
+
+unlinkIssue : String -> String -> (Result Http.Error () -> msg) -> Cmd msg
+unlinkIssue runId linkId toMsg =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = baseUrl ++ "/runs/" ++ runId ++ "/issues/" ++ linkId
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+resolveLinkedIssue : String -> String -> (Result Http.Error IssueLink -> msg) -> Cmd msg
+resolveLinkedIssue runId linkId toMsg =
+    Http.post
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/issues/" ++ linkId ++ "/resolve"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg issueLinkDecoder
+        }
+
+
+syncIssueStatus : String -> String -> (Result Http.Error IssueLink -> msg) -> Cmd msg
+syncIssueStatus runId linkId toMsg =
+    Http.post
+        { url = baseUrl ++ "/runs/" ++ runId ++ "/issues/" ++ linkId ++ "/sync"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg issueLinkDecoder
+        }

@@ -293,6 +293,111 @@ class UIAutomationClient:
     def revoke_api_token(self, token_id: str) -> dict:
         return self._request("DELETE", f"/tokens/{token_id}")
 
+    # --- Integrations ---
+
+    def create_integration(
+        self,
+        name: str,
+        provider: str,
+        credentials: list[dict],
+    ) -> dict:
+        return self._request("POST", "/integrations", json={
+            "name": name,
+            "provider": provider,
+            "credentials": credentials,
+        })
+
+    def list_integrations(self) -> dict:
+        return self._request("GET", "/integrations")
+
+    def get_integration(self, integration_id: str) -> dict:
+        return self._request("GET", f"/integrations/{integration_id}")
+
+    def update_integration(self, integration_id: str, **fields) -> dict:
+        return self._request(
+            "PUT", f"/integrations/{integration_id}", json=fields,
+        )
+
+    def delete_integration(self, integration_id: str) -> dict:
+        return self._request("DELETE", f"/integrations/{integration_id}")
+
+    def test_integration_connection(self, integration_id: str) -> dict:
+        return self._request("POST", f"/integrations/{integration_id}/test")
+
+    def search_external_issues(
+        self,
+        integration_id: str,
+        query: str = "",
+    ) -> dict:
+        params = {}
+        if query:
+            params["query"] = query
+        return self._request(
+            "GET", f"/integrations/{integration_id}/issues",
+            params=params,
+        )
+
+    # --- Issue Links ---
+
+    def create_and_link_issue(
+        self,
+        run_id: str,
+        integration_id: str,
+        title: str,
+        description: str = "",
+        project_key: str = "",
+        issue_type: str = "",
+        repository: str = "",
+        labels: list[str] | None = None,
+    ) -> dict:
+        payload: dict = {
+            "integration_id": integration_id,
+            "title": title,
+            "description": description,
+        }
+        if project_key:
+            payload["project_key"] = project_key
+        if issue_type:
+            payload["issue_type"] = issue_type
+        if repository:
+            payload["repository"] = repository
+        if labels:
+            payload["labels"] = labels
+        return self._request(
+            "POST", f"/runs/{run_id}/issues", json=payload,
+        )
+
+    def link_existing_issue(
+        self,
+        run_id: str,
+        integration_id: str,
+        external_id: str,
+    ) -> dict:
+        return self._request(
+            "POST", f"/runs/{run_id}/issues/link", json={
+                "integration_id": integration_id,
+                "external_id": external_id,
+            },
+        )
+
+    def list_issue_links(self, run_id: str) -> list:
+        return self._request("GET", f"/runs/{run_id}/issues")
+
+    def unlink_issue(self, run_id: str, link_id: str) -> dict:
+        return self._request(
+            "DELETE", f"/runs/{run_id}/issues/{link_id}",
+        )
+
+    def resolve_linked_issue(self, run_id: str, link_id: str) -> dict:
+        return self._request(
+            "POST", f"/runs/{run_id}/issues/{link_id}/resolve",
+        )
+
+    def sync_issue_status(self, run_id: str, link_id: str) -> dict:
+        return self._request(
+            "POST", f"/runs/{run_id}/issues/{link_id}/sync",
+        )
+
     def request_with_token(self, method: str, path: str, token: str, **kwargs) -> dict:
         """Make an API request using a Bearer token instead of session cookies."""
         headers = {"Authorization": f"Bearer {token}"}
