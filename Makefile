@@ -16,14 +16,20 @@ endif
 export APP_PORT
 export WORKSPACE_SUFFIX
 
-.PHONY: build run test migrate-up migrate-down clean install-deps docker-dev docker-build-elm docker-check-elm docker-rebuild-elm integration-test
+.PHONY: build build-cli build-all run test migrate-up migrate-down clean install-deps docker-dev docker-build-elm docker-check-elm docker-rebuild-elm integration-test
 
 BINARY_NAME=backend
+CLI_BINARY_NAME=uictl
 CONFIG_FILE=config.yaml
 MIGRATIONS_PATH=database/migrations
 
 build:
 	go build -o bin/$(BINARY_NAME) cmd/backend/*.go
+
+build-cli:
+	go build -o bin/$(CLI_BINARY_NAME) cmd/cli/*.go
+
+build-all: build build-cli
 
 run: build
 	./bin/$(BINARY_NAME) serve -c $(CONFIG_FILE)
