@@ -621,6 +621,53 @@ unlinkIssue runId linkId toMsg =
         }
 
 
+-- Generated Scripts
+
+
+getGeneratedScripts : String -> Int -> Int -> (Result Http.Error (PaginatedResponse GeneratedScript) -> msg) -> Cmd msg
+getGeneratedScripts procedureId limit offset toMsg =
+    Http.get
+        { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/scripts?limit=" ++ String.fromInt limit ++ "&offset=" ++ String.fromInt offset
+        , expect = Http.expectJson toMsg (paginatedDecoder generatedScriptDecoder)
+        }
+
+
+generateScript : String -> GenerateScriptInput -> (Result Http.Error GeneratedScript -> msg) -> Cmd msg
+generateScript procedureId input toMsg =
+    Http.post
+        { url = baseUrl ++ "/procedures/" ++ procedureId ++ "/scripts"
+        , body = Http.jsonBody (generateScriptInputEncoder input)
+        , expect = Http.expectJson toMsg generatedScriptDecoder
+        }
+
+
+getGeneratedScript : String -> (Result Http.Error GeneratedScript -> msg) -> Cmd msg
+getGeneratedScript scriptId toMsg =
+    Http.get
+        { url = baseUrl ++ "/scripts/" ++ scriptId
+        , expect = Http.expectJson toMsg generatedScriptDecoder
+        }
+
+
+deleteGeneratedScript : String -> (Result Http.Error () -> msg) -> Cmd msg
+deleteGeneratedScript scriptId toMsg =
+    Http.request
+        { method = "DELETE"
+        , headers = []
+        , url = baseUrl ++ "/scripts/" ++ scriptId
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+getScriptDownloadUrl : String -> String
+getScriptDownloadUrl scriptId =
+    baseUrl ++ "/scripts/" ++ scriptId ++ "/download"
+
+
+
 resolveLinkedIssue : String -> String -> (Result Http.Error IssueLink -> msg) -> Cmd msg
 resolveLinkedIssue runId linkId toMsg =
     Http.post

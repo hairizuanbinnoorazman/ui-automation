@@ -330,6 +330,41 @@ type alias UserListResponse =
 
 
 
+-- Generated Script Types
+
+
+type ScriptFramework
+    = Selenium
+    | Playwright
+
+
+type ScriptGenerationStatus
+    = ScriptPending
+    | ScriptGenerating
+    | ScriptCompleted
+    | ScriptFailed
+
+
+type alias GeneratedScript =
+    { id : String
+    , testProcedureId : String
+    , framework : ScriptFramework
+    , scriptPath : String
+    , fileName : String
+    , fileSize : Int
+    , generationStatus : ScriptGenerationStatus
+    , errorMessage : String
+    , generatedBy : String
+    , generatedAt : Time.Posix
+    , updatedAt : Time.Posix
+    }
+
+
+type alias GenerateScriptInput =
+    { framework : String }
+
+
+
 -- Pagination
 
 
@@ -584,6 +619,70 @@ jobDecoder =
                 Decode.map3 fn
                     (Decode.maybe (Decode.field "duration" Decode.int))
                     (Decode.field "created_at" timeDecoder)
+                    (Decode.field "updated_at" timeDecoder)
+            )
+
+
+scriptFrameworkDecoder : Decoder ScriptFramework
+scriptFrameworkDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "selenium" ->
+                        Decode.succeed Selenium
+
+                    "playwright" ->
+                        Decode.succeed Playwright
+
+                    _ ->
+                        Decode.fail ("Unknown framework: " ++ str)
+            )
+
+
+scriptGenerationStatusDecoder : Decoder ScriptGenerationStatus
+scriptGenerationStatusDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "pending" ->
+                        Decode.succeed ScriptPending
+
+                    "generating" ->
+                        Decode.succeed ScriptGenerating
+
+                    "completed" ->
+                        Decode.succeed ScriptCompleted
+
+                    "failed" ->
+                        Decode.succeed ScriptFailed
+
+                    _ ->
+                        Decode.fail ("Unknown generation status: " ++ str)
+            )
+
+
+generatedScriptDecoder : Decoder GeneratedScript
+generatedScriptDecoder =
+    Decode.map8
+        (\id testProcedureId framework scriptPath fileName fileSize generationStatus errorMessage ->
+            \generatedBy generatedAt updatedAt ->
+                GeneratedScript id testProcedureId framework scriptPath fileName fileSize generationStatus errorMessage generatedBy generatedAt updatedAt
+        )
+        (Decode.field "id" Decode.string)
+        (Decode.field "test_procedure_id" Decode.string)
+        (Decode.field "framework" scriptFrameworkDecoder)
+        (Decode.field "script_path" Decode.string)
+        (Decode.field "file_name" Decode.string)
+        (Decode.field "file_size" Decode.int)
+        (Decode.field "generation_status" scriptGenerationStatusDecoder)
+        (Decode.oneOf [ Decode.field "error_message" Decode.string, Decode.succeed "" ])
+        |> Decode.andThen
+            (\fn ->
+                Decode.map3 fn
+                    (Decode.field "generated_by" Decode.string)
+                    (Decode.field "generated_at" timeDecoder)
                     (Decode.field "updated_at" timeDecoder)
             )
 
@@ -843,3 +942,36 @@ linkExistingIssueInputEncoder input =
         [ ( "integration_id", Encode.string input.integrationId )
         , ( "external_id", Encode.string input.externalId )
         ]
+
+
+generateScriptInputEncoder : GenerateScriptInput -> Encode.Value
+generateScriptInputEncoder input =
+    Encode.object
+        [ ( "framework", Encode.string input.framework )
+        ]
+
+
+scriptFrameworkToString : ScriptFramework -> String
+scriptFrameworkToString framework =
+    case framework of
+        Selenium ->
+            "selenium"
+
+        Playwright ->
+            "playwright"
+
+
+scriptGenerationStatusToString : ScriptGenerationStatus -> String
+scriptGenerationStatusToString status =
+    case status of
+        ScriptPending ->
+            "pending"
+
+        ScriptGenerating ->
+            "generating"
+
+        ScriptCompleted ->
+            "completed"
+
+        ScriptFailed ->
+            "failed"
