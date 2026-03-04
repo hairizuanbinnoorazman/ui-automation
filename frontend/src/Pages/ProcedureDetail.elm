@@ -9,7 +9,7 @@ import Html.Attributes exposing (class, disabled, download, href, placeholder, s
 import Html.Events exposing (on, onClick, onInput)
 import Http
 import Json.Decode as Decode
-import Types exposing (DraftDiff, TestProcedure, TestStep)
+import Types exposing (DraftDiff, GeneratedScript, PaginatedResponse, TestProcedure, TestStep)
 
 
 type StepChange
@@ -27,6 +27,10 @@ type ProcedureViewMode
     | NewVersionMode
 
 
+type alias GenerateScriptDialogState =
+    { selectedFramework : String }
+
+
 type alias Model =
     { projectId : String
     , procedureId : String
@@ -40,6 +44,11 @@ type alias Model =
     , loading : Bool
     , error : Maybe String
     , showExportDropdown : Bool
+    , scripts : List GeneratedScript
+    , scriptsLoading : Bool
+    , scriptsError : Maybe String
+    , generateDialog : Maybe GenerateScriptDialogState
+    , deleteScriptConfirm : Maybe GeneratedScript
     }
 
 
@@ -57,10 +66,16 @@ init projectId procedureId =
       , loading = False
       , error = Nothing
       , showExportDropdown = False
+      , scripts = []
+      , scriptsLoading = True
+      , scriptsError = Nothing
+      , generateDialog = Nothing
+      , deleteScriptConfirm = Nothing
       }
     , Cmd.batch
         [ API.getTestProcedure projectId procedureId True DraftResponse
         , API.getTestProcedure projectId procedureId False CommittedResponse
+        , API.getGeneratedScripts procedureId 50 0 ScriptsResponse
         ]
     )
 
@@ -91,6 +106,17 @@ type Msg
     | DraftReset (Result Http.Error ())
     | CommitVersion
     | VersionCommitted (Result Http.Error TestProcedure)
+    | ScriptsResponse (Result Http.Error (PaginatedResponse GeneratedScript))
+    | OpenGenerateDialog
+    | CloseGenerateDialog
+    | SetGenerateFramework String
+    | SubmitGenerate
+    | GenerateResponse (Result Http.Error GeneratedScript)
+    | RefreshScripts
+    | OpenDeleteScriptConfirm GeneratedScript
+    | CloseDeleteScriptConfirm
+    | ConfirmDeleteScript String
+    | DeleteScriptResponse String (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -342,6 +368,74 @@ update msg model =
                     , Cmd.none
                     )
 
+        ScriptsResponse result ->
+            case result of
+                Ok response ->
+                    ( { model | scripts = response.items, scriptsLoading = False, scriptsError = Nothing }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | scriptsLoading = False, scriptsError = Just "Failed to load scripts" }
+                    , Cmd.none
+                    )
+
+        OpenGenerateDialog ->
+            ( { model | generateDialog = Just { selectedFramework = "selenium" } }, Cmd.none )
+
+        CloseGenerateDialog ->
+            ( { model | generateDialog = Nothing }, Cmd.none )
+
+        SetGenerateFramework framework ->
+            case model.generateDialog of
+                Just dialog ->
+                    ( { model | generateDialog = Just { dialog | selectedFramework = framework } }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SubmitGenerate ->
+            case model.generateDialog of
+                Just dialog ->
+                    ( { model | generateDialog = Nothing }
+                    , API.generateScript model.procedureId { framework = dialog.selectedFramework } GenerateResponse
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        GenerateResponse result ->
+            case result of
+                Ok script ->
+                    ( { model | scripts = script :: model.scripts }, Cmd.none )
+
+                Err _ ->
+                    ( { model | scriptsError = Just "Failed to generate script" }, Cmd.none )
+
+        RefreshScripts ->
+            ( { model | scriptsLoading = True, scriptsError = Nothing }
+            , API.getGeneratedScripts model.procedureId 50 0 ScriptsResponse
+            )
+
+        OpenDeleteScriptConfirm script ->
+            ( { model | deleteScriptConfirm = Just script }, Cmd.none )
+
+        CloseDeleteScriptConfirm ->
+            ( { model | deleteScriptConfirm = Nothing }, Cmd.none )
+
+        ConfirmDeleteScript scriptId ->
+            ( { model | deleteScriptConfirm = Nothing }
+            , API.deleteGeneratedScript scriptId (DeleteScriptResponse scriptId)
+            )
+
+        DeleteScriptResponse scriptId result ->
+            case result of
+                Ok () ->
+                    ( { model | scripts = List.filter (\s -> s.id /= scriptId) model.scripts }, Cmd.none )
+
+                Err _ ->
+                    ( { model | scriptsError = Just "Failed to delete script" }, Cmd.none )
+
 
 
 -- VIEW
@@ -370,6 +464,9 @@ view model =
                 NewVersionMode ->
                     viewNewVersionMode model
             , viewError model.error
+            , viewScriptsSection model
+            , viewGenerateDialog model
+            , viewDeleteScriptConfirm model
             ]
         ]
 
@@ -958,6 +1055,225 @@ viewNewVersionMode model =
             , button [ onClick CommitVersion, class "mdc-button mdc-button--raised" ] [ text "Create New Version" ]
             ]
         ]
+
+
+viewScriptsSection : Model -> Html Msg
+viewScriptsSection model =
+    div
+        [ style "margin-top" "32px"
+        , style "border-top" "1px solid #e0e0e0"
+        , style "padding-top" "24px"
+        ]
+        [ div
+            [ style "display" "flex"
+            , style "align-items" "center"
+            , style "gap" "8px"
+            , style "margin-bottom" "16px"
+            ]
+            [ h3
+                [ class "mdc-typography--headline6"
+                , style "margin" "0"
+                ]
+                [ text "Generated Scripts" ]
+            , button
+                [ onClick OpenGenerateDialog
+                , class "mdc-button mdc-button--raised"
+                ]
+                [ text "Generate Script" ]
+            , button
+                [ onClick RefreshScripts
+                , class "mdc-button"
+                ]
+                [ text "Refresh" ]
+            ]
+        , case model.scriptsError of
+            Just err ->
+                div
+                    [ style "color" "#d32f2f"
+                    , style "margin-bottom" "12px"
+                    ]
+                    [ text err ]
+
+            Nothing ->
+                text ""
+        , if model.scriptsLoading then
+            div [] [ text "Loading scripts..." ]
+
+          else if List.isEmpty model.scripts then
+            p [ class "mdc-typography--body2", style "color" "#757575" ] [ text "No scripts generated yet." ]
+
+          else
+            div
+                [ style "border" "1px solid #e0e0e0"
+                , style "border-radius" "4px"
+                , style "overflow" "hidden"
+                ]
+                [ Html.table
+                    [ style "width" "100%"
+                    , style "border-collapse" "collapse"
+                    ]
+                    [ Html.thead []
+                        [ Html.tr
+                            [ style "background-color" "#f5f5f5"
+                            , style "border-bottom" "1px solid #e0e0e0"
+                            ]
+                            [ Html.th [ style "padding" "10px 16px", style "text-align" "left" ] [ text "Framework" ]
+                            , Html.th [ style "padding" "10px 16px", style "text-align" "left" ] [ text "File Name" ]
+                            , Html.th [ style "padding" "10px 16px", style "text-align" "left" ] [ text "Status" ]
+                            , Html.th [ style "padding" "10px 16px", style "text-align" "right" ] [ text "Actions" ]
+                            ]
+                        ]
+                    , Html.tbody [] (List.map viewScriptRow model.scripts)
+                    ]
+                ]
+        ]
+
+
+viewScriptRow : GeneratedScript -> Html Msg
+viewScriptRow script =
+    Html.tr
+        [ style "border-bottom" "1px solid #e0e0e0" ]
+        [ Html.td [ style "padding" "10px 16px" ]
+            [ viewFrameworkBadge script.framework ]
+        , Html.td [ style "padding" "10px 16px" ]
+            [ text script.fileName ]
+        , Html.td [ style "padding" "10px 16px" ]
+            [ viewStatusBadge script.generationStatus
+            , if script.errorMessage /= "" then
+                span
+                    [ style "margin-left" "8px"
+                    , style "color" "#d32f2f"
+                    , style "font-size" "12px"
+                    ]
+                    [ text script.errorMessage ]
+
+              else
+                text ""
+            ]
+        , Html.td [ style "padding" "10px 16px", style "text-align" "right" ]
+            [ if script.generationStatus == Types.ScriptCompleted then
+                a
+                    [ href (API.getScriptDownloadUrl script.id)
+                    , download ""
+                    , class "mdc-button"
+                    , style "margin-right" "4px"
+                    ]
+                    [ text "Download" ]
+
+              else
+                text ""
+            , button
+                [ onClick (OpenDeleteScriptConfirm script)
+                , class "mdc-button"
+                , style "color" "#d32f2f"
+                ]
+                [ text "Delete" ]
+            ]
+        ]
+
+
+viewFrameworkBadge : Types.ScriptFramework -> Html Msg
+viewFrameworkBadge framework =
+    let
+        ( label, bgColor ) =
+            case framework of
+                Types.Selenium ->
+                    ( "Selenium", "#43a047" )
+
+                Types.Playwright ->
+                    ( "Playwright", "#1565c0" )
+    in
+    span
+        [ style "background-color" bgColor
+        , style "color" "white"
+        , style "font-size" "12px"
+        , style "font-weight" "500"
+        , style "padding" "2px 8px"
+        , style "border-radius" "12px"
+        ]
+        [ text label ]
+
+
+viewStatusBadge : Types.ScriptGenerationStatus -> Html Msg
+viewStatusBadge status =
+    let
+        ( label, bgColor ) =
+            case status of
+                Types.ScriptPending ->
+                    ( "Pending", "#ff9800" )
+
+                Types.ScriptGenerating ->
+                    ( "Generating", "#2196f3" )
+
+                Types.ScriptCompleted ->
+                    ( "Completed", "#4caf50" )
+
+                Types.ScriptFailed ->
+                    ( "Failed", "#d32f2f" )
+    in
+    span
+        [ style "background-color" bgColor
+        , style "color" "white"
+        , style "font-size" "12px"
+        , style "font-weight" "500"
+        , style "padding" "2px 8px"
+        , style "border-radius" "12px"
+        ]
+        [ text label ]
+
+
+viewGenerateDialog : Model -> Html Msg
+viewGenerateDialog model =
+    case model.generateDialog of
+        Nothing ->
+            text ""
+
+        Just dialog ->
+            Components.viewDialogOverlay "Generate Script"
+                [ Components.viewSelectField "Framework"
+                    [ Html.Events.onInput SetGenerateFramework
+                    , Html.Attributes.value dialog.selectedFramework
+                    ]
+                    [ Html.option [ Html.Attributes.value "selenium" ] [ text "Selenium" ]
+                    , Html.option [ Html.Attributes.value "playwright" ] [ text "Playwright" ]
+                    ]
+                ]
+                [ button
+                    [ onClick CloseGenerateDialog
+                    , class "mdc-button"
+                    ]
+                    [ text "Cancel" ]
+                , button
+                    [ onClick SubmitGenerate
+                    , class "mdc-button mdc-button--raised"
+                    ]
+                    [ text "Generate" ]
+                ]
+
+
+viewDeleteScriptConfirm : Model -> Html Msg
+viewDeleteScriptConfirm model =
+    case model.deleteScriptConfirm of
+        Nothing ->
+            text ""
+
+        Just script ->
+            Components.viewDialogOverlay "Delete Script"
+                [ p [ class "mdc-typography--body1" ]
+                    [ text ("Are you sure you want to delete \"" ++ script.fileName ++ "\"?") ]
+                ]
+                [ button
+                    [ onClick CloseDeleteScriptConfirm
+                    , class "mdc-button"
+                    ]
+                    [ text "Cancel" ]
+                , button
+                    [ onClick (ConfirmDeleteScript script.id)
+                    , class "mdc-button mdc-button--raised"
+                    , style "background-color" "#d32f2f"
+                    ]
+                    [ text "Delete" ]
+                ]
 
 
 viewError : Maybe String -> Html Msg
